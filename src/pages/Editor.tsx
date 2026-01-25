@@ -1,8 +1,13 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAction, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { Id } from '../../convex/_generated/dataModel';
 import { AppLayout, PageContainer } from '@/components/layout';
-import { Button, Card, Badge, Spinner } from '@/components/ui';
-import { cn } from '@/lib/utils';
+import { Button, Card, Badge, Spinner, Modal } from '@/components/ui';
+import { useProject, useUpdateProject } from '@/hooks/useProjects';
+import { WaveformPlayer } from '@/hooks/useWaveform';
+import { cn, formatDuration } from '@/lib/utils';
 import {
   ArrowLeft,
   Play,
@@ -23,6 +28,9 @@ import {
   Redo,
   ZoomIn,
   ZoomOut,
+  Loader2,
+  AlertCircle,
+  Check,
 } from 'lucide-react';
 
 // Format presets for different social platforms
@@ -33,39 +41,147 @@ const formatPresets = [
 ];
 
 export default function Editor() {
-  const { projectId } = useParams();
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const waveformRef = React.useRef<HTMLDivElement>(null);
+
+  // Load project data
+  const { project, isLoading } = useProject(projectId as Id<"projects"> | null);
+  const { updateProject } = useUpdateProject();
 
   // Editor state
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [isMuted, setIsMuted] = React.useState(false);
   const [currentTime, setCurrentTime] = React.useState(0);
-  const [duration, setDuration] = React.useState(180); // Mock: 3 minutes
+  const [duration, setDuration] = React.useState(0);
   const [selectedFormat, setSelectedFormat] = React.useState('square');
   const [zoom, setZoom] = React.useState(1);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
+  const [transcriptionStatus, setTranscriptionStatus] = React.useState<'idle' | 'success' | 'error'>('idle');
 
-  // Mock waveform data
+  // Audio element ref
+  const audioRef = React.useRef<HTMLAudioElement>(null);
+
+  // Waveform visualization (mock data fallback)
   const waveformBars = React.useMemo(() =>
     [...Array(100)].map(() => 20 + Math.random() * 60),
     []
   );
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  // Load audio metadata
+  React.useEffect(() => {
+    if (project?.duration) {
+      setDuration(project.duration);
+    }
+  }, [project]);
+
+  // Handle audio playback
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
   };
 
-  const progressPercent = (currentTime / duration) * 100;
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (audioRef.current && duration > 0) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const seekTime = (x / rect.width) * duration;
+      audioRef.current.currentTime = seekTime;
+      setCurrentTime(seekTime);
+    }
+  };
 
   const handleTranscribe = async () => {
+    if (!projectId) return;
+
     setIsTranscribing(true);
-    // TODO: Implement actual transcription
-    setTimeout(() => setIsTranscribing(false), 3000);
+    setTranscriptionStatus('idle');
+
+    try {
+      // TODO: Call Convex transcription action
+      // await transcribe({ projectId: projectId as Id<"projects"> });
+
+      // Mock transcription for now
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setTranscriptionStatus('success');
+    } catch (error) {
+      console.error('Transcription failed:', error);
+      setTranscriptionStatus('error');
+    } finally {
+      setIsTranscribing(false);
+    }
   };
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <AppLayout userName="John Doe">
+        <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+          <div className="text-center">
+            <Spinner size="lg" className="mb-4" />
+            <p className="text-slate-500">Loading project...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Project not found
+  if (!project && !isLoading) {
+    return (
+      <AppLayout userName="John Doe">
+        <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+              Project not found
+            </h2>
+            <p className="text-slate-500 mb-4">
+              This project may have been deleted or doesn't exist.
+            </p>
+            <Link to="/dashboard">
+              <Button variant="primary">Back to Dashboard</Button>
+            </Link>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout userName="John Doe">
+      {/* Hidden audio element for playback */}
+      {project?.audioUrl && (
+        <audio
+          ref={audioRef}
+          src={project.audioUrl}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onEnded={() => setIsPlaying(false)}
+          muted={isMuted}
+        />
+      )}
+
       <div className="h-[calc(100vh-4rem)] flex flex-col">
         {/* Top Toolbar */}
         <div className="shrink-0 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
@@ -80,9 +196,16 @@ export default function Editor() {
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
               <div>
                 <h1 className="font-semibold text-slate-900 dark:text-white">
-                  Podcast Episode 42
+                  {project?.title || 'Untitled Project'}
                 </h1>
-                <p className="text-xs text-slate-500">Project ID: {projectId}</p>
+                <div className="flex items-center gap-2">
+                  <Badge size="sm" variant={project?.status === 'ready' ? 'success' : 'primary'}>
+                    {project?.status}
+                  </Badge>
+                  <span className="text-xs text-slate-500">
+                    {formatDuration(project?.duration || 0)}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -101,19 +224,29 @@ export default function Editor() {
               <Button
                 variant="outline"
                 size="sm"
-                leftIcon={isTranscribing ? <Spinner size="sm" /> : <Sparkles className="h-4 w-4" />}
+                leftIcon={
+                  isTranscribing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : transcriptionStatus === 'success' ? (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )
+                }
                 onClick={handleTranscribe}
-                disabled={isTranscribing}
+                disabled={isTranscribing || !project?.audioUrl}
               >
-                {isTranscribing ? 'Transcribing...' : 'AI Captions'}
+                {isTranscribing ? 'Transcribing...' : transcriptionStatus === 'success' ? 'Transcribed' : 'AI Captions'}
               </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Download className="h-4 w-4" />}
-              >
-                Export
-              </Button>
+              <Link to={`/export/${projectId}`}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Download className="h-4 w-4" />}
+                >
+                  Export
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -162,13 +295,16 @@ export default function Editor() {
                 {/* Caption Preview */}
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/60 backdrop-blur rounded-lg max-w-[80%]">
                   <p className="text-white text-sm font-medium text-center">
-                    "The future of content creation is here and it's more accessible than ever..."
+                    {transcriptionStatus === 'success'
+                      ? '"Click AI Captions to generate subtitles..."'
+                      : '"The future of content creation is here..."'
+                    }
                   </p>
                 </div>
 
                 {/* Timestamp */}
                 <div className="absolute top-4 right-4 px-2 py-1 bg-black/40 rounded text-white text-xs font-mono">
-                  {formatTime(currentTime)}
+                  {formatDuration(currentTime)}
                 </div>
               </div>
             </div>
@@ -198,139 +334,132 @@ export default function Editor() {
                       : 'text-slate-400'
                   )} />
                   <div className="text-left">
-                    <div className={cn(
-                      'font-medium text-sm',
+                    <p className={cn(
+                      'text-sm font-medium',
                       selectedFormat === format.id
                         ? 'text-indigo-600'
                         : 'text-slate-700 dark:text-slate-300'
                     )}>
                       {format.label}
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {format.ratio} • {format.width}×{format.height}
-                    </div>
+                    </p>
+                    <p className="text-xs text-slate-500">{format.ratio}</p>
                   </div>
                 </button>
               ))}
             </div>
 
+            {/* Zoom Controls */}
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
-                Zoom
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                Preview Zoom
               </h3>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                  disabled={zoom <= 0.5}
                 >
                   <ZoomOut className="h-4 w-4" />
                 </Button>
-                <span className="text-sm text-slate-600 dark:text-slate-400">
-                  {Math.round(zoom * 100)}%
-                </span>
+                <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full">
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${((zoom - 0.5) / 1) * 100}%` }}
+                  />
+                </div>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
-                  onClick={() => setZoom(Math.min(2, zoom + 0.1))}
+                  onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+                  disabled={zoom >= 1.5}
                 >
                   <ZoomIn className="h-4 w-4" />
                 </Button>
               </div>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
-                Platform Presets
-              </h3>
-              <div className="grid grid-cols-2 gap-2">
-                {['Instagram', 'TikTok', 'Twitter', 'YouTube'].map((platform) => (
-                  <Badge
-                    key={platform}
-                    variant="outline"
-                    className="justify-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    {platform}
-                  </Badge>
-                ))}
-              </div>
+              <p className="text-xs text-slate-500 text-center mt-2">
+                {Math.round(zoom * 100)}%
+              </p>
             </div>
           </div>
         </div>
 
         {/* Bottom Timeline */}
         <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4">
-          {/* Transport Controls */}
-          <div className="flex items-center justify-center gap-4 mb-4">
-            <Button variant="ghost" size="sm">
-              <SkipBack className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="primary"
-              className="w-12 h-12 rounded-full"
-              onClick={() => setIsPlaying(!isPlaying)}
-            >
-              {isPlaying ? (
-                <Pause className="h-5 w-5" />
-              ) : (
-                <Play className="h-5 w-5 ml-0.5" />
-              )}
-            </Button>
-            <Button variant="ghost" size="sm">
-              <SkipForward className="h-4 w-4" />
-            </Button>
-            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-2" />
+          {/* Playback Controls */}
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = Math.max(0, currentTime - 5);
+                }
+              }}>
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                className="w-10 h-10 rounded-full"
+                onClick={handlePlayPause}
+                disabled={!project?.audioUrl}
+              >
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.currentTime = Math.min(duration, currentTime + 5);
+                }
+              }}>
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="text-sm font-mono text-slate-600 dark:text-slate-400">
+              {formatDuration(currentTime)} / {formatDuration(duration)}
+            </div>
+
+            <div className="flex-1" />
+
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setIsMuted(!isMuted)}
             >
-              {isMuted ? (
-                <VolumeX className="h-4 w-4" />
-              ) : (
-                <Volume2 className="h-4 w-4" />
-              )}
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
             </Button>
-            <span className="text-sm text-slate-600 dark:text-slate-400 font-mono">
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </span>
           </div>
 
-          {/* Waveform Timeline */}
-          <div className="relative h-16 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden cursor-pointer">
-            {/* Waveform Bars */}
+          {/* Timeline Scrubber */}
+          <div
+            className="relative h-12 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-hidden cursor-pointer group"
+            onClick={handleSeek}
+          >
+            {/* Waveform Background */}
             <div className="absolute inset-0 flex items-center justify-center gap-px px-2">
               {waveformBars.map((height, i) => (
                 <div
                   key={i}
                   className={cn(
-                    'w-1 rounded-full',
+                    'w-1 rounded-full transition-colors',
                     i < (progressPercent / 100) * waveformBars.length
                       ? 'bg-indigo-500'
                       : 'bg-slate-300 dark:bg-slate-600'
                   )}
-                  style={{ height: `${height}%` }}
+                  style={{ height: `${height * 0.8}%` }}
                 />
               ))}
             </div>
 
             {/* Progress Indicator */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-10"
+              className="absolute top-0 bottom-0 w-0.5 bg-indigo-600 z-10"
               style={{ left: `${progressPercent}%` }}
             >
-              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-rose-500 rounded-full" />
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-indigo-600 border-2 border-white shadow" />
             </div>
 
-            {/* Click Handler */}
-            <div
-              className="absolute inset-0"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const percent = (e.clientX - rect.left) / rect.width;
-                setCurrentTime(percent * duration);
-              }}
-            />
+            {/* Hover indicator */}
+            <div className="absolute inset-0 bg-indigo-500/0 group-hover:bg-indigo-500/5 transition-colors" />
           </div>
         </div>
       </div>
@@ -338,23 +467,15 @@ export default function Editor() {
   );
 }
 
-// Tool Button Component
-function ToolButton({
-  icon: Icon,
-  label,
-  active = false
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-}) {
+// ─── Tool Button Component ───
+function ToolButton({ icon: Icon, label, active = false }: { icon: any; label: string; active?: boolean }) {
   return (
     <button
       className={cn(
-        'w-full aspect-square rounded-lg flex flex-col items-center justify-center gap-1 transition-colors',
+        'w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors',
         active
           ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400'
-          : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+          : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
       )}
       title={label}
     >
