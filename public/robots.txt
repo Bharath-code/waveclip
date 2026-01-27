@@ -1,0 +1,12 @@
+# Waveclip Robots.txt
+# https://waveclip.app
+
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /editor
+Disallow: /export
+Disallow: /settings
+
+# Sitemap location
+Sitemap: https://waveclip.app/sitemap.xml

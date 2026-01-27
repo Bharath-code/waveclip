@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { MarketingLayout, PageContainer } from '@/components/layout';
 import { Button, Card, Badge } from '@/components/ui';
+import { PricingSEO } from '@/components/SEO';
 import { PLANS, formatCurrency, calculateYearlySavings, type PlanId } from '@/lib/dodo';
 import { cn } from '@/lib/utils';
 import {
@@ -19,6 +20,7 @@ export default function Pricing() {
 
     return (
         <MarketingLayout>
+            <PricingSEO />
             <PageContainer className="py-20 lg:py-32">
                 {/* Header */}
                 <div className="text-center mb-16">

@@ -264,3 +264,136 @@ export const deleteCaption = mutation({
         return { success: true };
     },
 });
+
+// ─── Split Caption ───
+export const splitCaption = mutation({
+    args: {
+        captionId: v.id("captions"),
+        splitTime: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const caption = await ctx.db.get(args.captionId);
+        if (!caption) {
+            throw new Error("Caption not found");
+        }
+
+        // Validate split time is within caption bounds
+        if (args.splitTime <= caption.startTime || args.splitTime >= caption.endTime) {
+            throw new Error("Split time must be within caption time range");
+        }
+
+        // Calculate word split based on time ratio
+        const words = caption.text.split(' ');
+        const totalDuration = caption.endTime - caption.startTime;
+        const splitRatio = (args.splitTime - caption.startTime) / totalDuration;
+        const splitWordIndex = Math.floor(words.length * splitRatio);
+        const effectiveSplitIndex = Math.max(1, Math.min(words.length - 1, splitWordIndex));
+
+        const firstText = words.slice(0, effectiveSplitIndex).join(' ');
+        const secondText = words.slice(effectiveSplitIndex).join(' ');
+
+        const now = Date.now();
+
+        // Update the original caption to be the first part
+        await ctx.db.patch(args.captionId, {
+            text: firstText,
+            endTime: args.splitTime,
+            updatedAt: now,
+        });
+
+        // Create a new caption for the second part
+        const newCaptionId = await ctx.db.insert("captions", {
+            projectId: caption.projectId,
+            text: secondText,
+            startTime: args.splitTime,
+            endTime: caption.endTime,
+            style: caption.style,
+            createdAt: now,
+        });
+
+        return {
+            success: true,
+            originalCaption: args.captionId,
+            newCaption: newCaptionId,
+        };
+    },
+});
+
+// ─── Merge Captions ───
+export const mergeCaptions = mutation({
+    args: {
+        captionIds: v.array(v.id("captions")),
+    },
+    handler: async (ctx, args) => {
+        if (args.captionIds.length < 2) {
+            throw new Error("Need at least 2 captions to merge");
+        }
+
+        // Get all captions
+        const captions = await Promise.all(
+            args.captionIds.map((id) => ctx.db.get(id))
+        );
+
+        // Filter out nulls and sort by start time
+        const validCaptions = captions
+            .filter((c): c is NonNullable<typeof c> => c !== null)
+            .sort((a, b) => a.startTime - b.startTime);
+
+        if (validCaptions.length < 2) {
+            throw new Error("Could not find enough captions to merge");
+        }
+
+        // Merge text and get time range
+        const mergedText = validCaptions.map((c) => c.text).join(' ');
+        const startTime = validCaptions[0].startTime;
+        const endTime = validCaptions[validCaptions.length - 1].endTime;
+
+        // Update first caption with merged content
+        await ctx.db.patch(validCaptions[0]._id, {
+            text: mergedText,
+            endTime: endTime,
+            updatedAt: Date.now(),
+        });
+
+        // Delete remaining captions
+        for (let i = 1; i < validCaptions.length; i++) {
+            await ctx.db.delete(validCaptions[i]._id);
+        }
+
+        return {
+            success: true,
+            mergedCaptionId: validCaptions[0]._id,
+        };
+    },
+});
+
+// ─── Add Caption ───
+export const addCaption = mutation({
+    args: {
+        projectId: v.id("projects"),
+        text: v.string(),
+        startTime: v.number(),
+        endTime: v.number(),
+        style: v.optional(
+            v.object({
+                fontSize: v.optional(v.number()),
+                fontFamily: v.optional(v.string()),
+                color: v.optional(v.string()),
+                backgroundColor: v.optional(v.string()),
+                position: v.optional(v.string()),
+            })
+        ),
+    },
+    handler: async (ctx, args) => {
+        const captionId = await ctx.db.insert("captions", {
+            projectId: args.projectId,
+            text: args.text,
+            startTime: args.startTime,
+            endTime: args.endTime,
+            style: args.style,
+            createdAt: Date.now(),
+        });
+
+        return { success: true, captionId };
+    },
+});
