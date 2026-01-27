@@ -173,6 +173,19 @@ export function useFFmpeg(): UseFFmpegReturn {
 }
 
 // ─── Canvas Waveform Renderer ───
+export interface CaptionSegment {
+    text: string;
+    startTime: number;
+    endTime: number;
+    style?: {
+        fontSize?: number;
+        fontFamily?: string;
+        color?: string;
+        backgroundColor?: string;
+        position?: string;
+    };
+}
+
 interface WaveformRendererOptions {
     audioBuffer: AudioBuffer;
     width: number;
@@ -183,6 +196,7 @@ interface WaveformRendererOptions {
     progressColor?: string;
     backgroundColor?: string;
     fps?: number;
+    captions?: CaptionSegment[];
 }
 
 export async function generateWaveformFrames(
@@ -199,6 +213,7 @@ export async function generateWaveformFrames(
         progressColor = '#ffffff',
         backgroundColor = '#6366f1', // Indigo
         fps = 30,
+        captions = [],
     } = options;
 
     const duration = audioBuffer.duration;
@@ -232,6 +247,7 @@ export async function generateWaveformFrames(
     // Generate frames
     for (let frame = 0; frame < totalFrames; frame++) {
         const progress = frame / totalFrames;
+        const currentTime = (frame / fps);
 
         // Clear canvas
         ctx.fillStyle = backgroundColor;
@@ -250,6 +266,60 @@ export async function generateWaveformFrames(
             ctx.beginPath();
             ctx.roundRect(x, y, barWidth, barHeight, barWidth / 2);
             ctx.fill();
+        }
+
+        // Draw caption for current time
+        const activeCaption = captions.find(
+            (c) => currentTime >= c.startTime && currentTime < c.endTime
+        );
+
+        if (activeCaption) {
+            const fontSize = activeCaption.style?.fontSize || 32;
+            const fontFamily = activeCaption.style?.fontFamily || 'Inter, sans-serif';
+            const textColor = activeCaption.style?.color || '#ffffff';
+            const bgColor = activeCaption.style?.backgroundColor || 'rgba(0, 0, 0, 0.6)';
+            const position = activeCaption.style?.position || 'bottom';
+
+            // Set font
+            ctx.font = `bold ${fontSize}px ${fontFamily}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Measure text
+            const metrics = ctx.measureText(activeCaption.text);
+            const textWidth = metrics.width;
+            const textHeight = fontSize * 1.2;
+            const padding = fontSize * 0.5;
+
+            // Calculate position
+            let textY: number;
+            switch (position) {
+                case 'top':
+                    textY = height * 0.15;
+                    break;
+                case 'middle':
+                    textY = height * 0.5;
+                    break;
+                case 'bottom':
+                default:
+                    textY = height * 0.85;
+                    break;
+            }
+
+            // Draw background
+            ctx.fillStyle = bgColor;
+            const bgX = (width - textWidth) / 2 - padding;
+            const bgWidth = textWidth + padding * 2;
+            const bgHeight = textHeight + padding;
+            const bgY = textY - bgHeight / 2;
+
+            ctx.beginPath();
+            ctx.roundRect(bgX, bgY, bgWidth, bgHeight, 8);
+            ctx.fill();
+
+            // Draw text
+            ctx.fillStyle = textColor;
+            ctx.fillText(activeCaption.text, width / 2, textY);
         }
 
         // Convert to base64

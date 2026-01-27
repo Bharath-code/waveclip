@@ -1,12 +1,13 @@
 import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useAction, useMutation } from 'convex/react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
+import { Id, Doc } from '../../convex/_generated/dataModel';
 import { AppLayout, PageContainer } from '@/components/layout';
 import { Button, Card, Badge, Spinner, Modal } from '@/components/ui';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { WaveformPlayer } from '@/hooks/useWaveform';
+import { CaptionTimeline, CaptionEditor } from '@/features/captions';
 import { cn, formatDuration } from '@/lib/utils';
 import {
   ArrowLeft,
@@ -58,6 +59,22 @@ export default function Editor() {
   const [zoom, setZoom] = React.useState(1);
   const [isTranscribing, setIsTranscribing] = React.useState(false);
   const [transcriptionStatus, setTranscriptionStatus] = React.useState<'idle' | 'success' | 'error'>('idle');
+  const [activePanel, setActivePanel] = React.useState<'captions' | 'style' | 'settings'>('captions');
+  const [selectedCaption, setSelectedCaption] = React.useState<Doc<'captions'> | null>(null);
+
+  // Load captions
+  const captions = useQuery(
+    api.transcription.getCaptions,
+    projectId ? { projectId: projectId as Id<'projects'> } : 'skip'
+  );
+
+  // Get active caption based on current time
+  const activeCaption = React.useMemo(() => {
+    if (!captions) return null;
+    return captions.find(
+      (c) => currentTime >= c.startTime && currentTime < c.endTime
+    );
+  }, [captions, currentTime]);
 
   // Audio element ref
   const audioRef = React.useRef<HTMLAudioElement>(null);
@@ -109,6 +126,8 @@ export default function Editor() {
     }
   };
 
+  const transcribe = useAction(api.transcription.transcribe);
+
   const handleTranscribe = async () => {
     if (!projectId) return;
 
@@ -116,12 +135,9 @@ export default function Editor() {
     setTranscriptionStatus('idle');
 
     try {
-      // TODO: Call Convex transcription action
-      // await transcribe({ projectId: projectId as Id<"projects"> });
-
-      // Mock transcription for now
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await transcribe({ projectId: projectId as Id<"projects"> });
       setTranscriptionStatus('success');
+      setActivePanel('captions'); // Switch to captions panel to see results
     } catch (error) {
       console.error('Transcription failed:', error);
       setTranscriptionStatus('error');
@@ -255,9 +271,9 @@ export default function Editor() {
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar - Tools */}
           <div className="w-16 shrink-0 border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2 flex flex-col gap-2">
-            <ToolButton icon={Type} label="Captions" active />
-            <ToolButton icon={Palette} label="Style" />
-            <ToolButton icon={Settings} label="Settings" />
+            <ToolButton icon={Type} label="Captions" active={activePanel === 'captions'} onClick={() => setActivePanel('captions')} />
+            <ToolButton icon={Palette} label="Style" active={activePanel === 'style'} onClick={() => setActivePanel('style')} />
+            <ToolButton icon={Settings} label="Settings" active={activePanel === 'settings'} onClick={() => setActivePanel('settings')} />
           </div>
 
           {/* Center - Preview Canvas */}
@@ -295,10 +311,10 @@ export default function Editor() {
                 {/* Caption Preview */}
                 <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/60 backdrop-blur rounded-lg max-w-[80%]">
                   <p className="text-white text-sm font-medium text-center">
-                    {transcriptionStatus === 'success'
-                      ? '"Click AI Captions to generate subtitles..."'
-                      : '"The future of content creation is here..."'
-                    }
+                    {activeCaption?.text || (captions && captions.length > 0
+                      ? 'Captions will appear during playback...'
+                      : '"Click AI Captions to transcribe your audio..."'
+                    )}
                   </p>
                 </div>
 
@@ -310,77 +326,142 @@ export default function Editor() {
             </div>
           </div>
 
-          {/* Right Sidebar - Format Selector */}
-          <div className="w-64 shrink-0 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 overflow-y-auto">
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
-              Export Format
-            </h3>
-            <div className="space-y-2">
-              {formatPresets.map((format) => (
-                <button
-                  key={format.id}
-                  onClick={() => setSelectedFormat(format.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
-                    selectedFormat === format.id
-                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
-                      : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                  )}
-                >
-                  <format.icon className={cn(
-                    'h-5 w-5',
-                    selectedFormat === format.id
-                      ? 'text-indigo-600'
-                      : 'text-slate-400'
-                  )} />
-                  <div className="text-left">
-                    <p className={cn(
-                      'text-sm font-medium',
-                      selectedFormat === format.id
-                        ? 'text-indigo-600'
-                        : 'text-slate-700 dark:text-slate-300'
-                    )}>
-                      {format.label}
-                    </p>
-                    <p className="text-xs text-slate-500">{format.ratio}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Zoom Controls */}
-            <div className="mt-6">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
-                Preview Zoom
-              </h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
-                  disabled={zoom <= 0.5}
-                >
-                  <ZoomOut className="h-4 w-4" />
-                </Button>
-                <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
-                    style={{ width: `${((zoom - 0.5) / 1) * 100}%` }}
+          {/* Right Sidebar - Dynamic Panel */}
+          <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-col overflow-hidden">
+            {activePanel === 'captions' && (
+              <>
+                {selectedCaption ? (
+                  <CaptionEditor
+                    caption={selectedCaption}
+                    onClose={() => setSelectedCaption(null)}
+                    className="flex-1 overflow-y-auto"
                   />
+                ) : (
+                  <CaptionTimeline
+                    projectId={projectId as Id<'projects'>}
+                    currentTime={currentTime}
+                    duration={duration}
+                    onSeek={(time) => {
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = time;
+                        setCurrentTime(time);
+                      }
+                    }}
+                    onCaptionSelect={(caption) => setSelectedCaption(caption)}
+                    selectedCaptionId={selectedCaption?._id}
+                    className="flex-1 overflow-hidden"
+                  />
+                )}
+              </>
+            )}
+
+            {activePanel === 'style' && (
+              <div className="p-4 overflow-y-auto">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
+                  Export Format
+                </h3>
+                <div className="space-y-2">
+                  {formatPresets.map((format) => (
+                    <button
+                      key={format.id}
+                      onClick={() => setSelectedFormat(format.id)}
+                      className={cn(
+                        'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
+                        selectedFormat === format.id
+                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
+                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                      )}
+                    >
+                      <format.icon className={cn(
+                        'h-5 w-5',
+                        selectedFormat === format.id
+                          ? 'text-indigo-600'
+                          : 'text-slate-400'
+                      )} />
+                      <div className="text-left">
+                        <p className={cn(
+                          'text-sm font-medium',
+                          selectedFormat === format.id
+                            ? 'text-indigo-600'
+                            : 'text-slate-700 dark:text-slate-300'
+                        )}>
+                          {format.label}
+                        </p>
+                        <p className="text-xs text-slate-500">{format.ratio}</p>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
-                  disabled={zoom >= 1.5}
-                >
-                  <ZoomIn className="h-4 w-4" />
-                </Button>
+
+                {/* Zoom Controls */}
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                    Preview Zoom
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                      disabled={zoom <= 0.5}
+                    >
+                      <ZoomOut className="h-4 w-4" />
+                    </Button>
+                    <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full transition-all"
+                        style={{ width: `${((zoom - 0.5) / 1) * 100}%` }}
+                      />
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+                      disabled={zoom >= 1.5}
+                    >
+                      <ZoomIn className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-500 text-center mt-2">
+                    {Math.round(zoom * 100)}%
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 text-center mt-2">
-                {Math.round(zoom * 100)}%
-              </p>
-            </div>
+            )}
+
+            {activePanel === 'settings' && (
+              <div className="p-4 overflow-y-auto">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
+                  Project Settings
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Project Title
+                    </label>
+                    <p className="text-sm text-slate-900 dark:text-white">
+                      {project?.title || 'Untitled'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Duration
+                    </label>
+                    <p className="text-sm text-slate-900 dark:text-white">
+                      {formatDuration(project?.duration || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Captions
+                    </label>
+                    <p className="text-sm text-slate-900 dark:text-white">
+                      {captions?.length || 0} segments
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -468,9 +549,10 @@ export default function Editor() {
 }
 
 // ─── Tool Button Component ───
-function ToolButton({ icon: Icon, label, active = false }: { icon: any; label: string; active?: boolean }) {
+function ToolButton({ icon: Icon, label, active = false, onClick }: { icon: any; label: string; active?: boolean; onClick?: () => void }) {
   return (
     <button
+      onClick={onClick}
       className={cn(
         'w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors',
         active

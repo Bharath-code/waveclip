@@ -5,6 +5,13 @@ import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Required headers for FFmpeg.wasm SharedArrayBuffer support
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
   build: {
     sourcemap: 'hidden',
   },
@@ -24,7 +31,7 @@ export default defineConfig({
       clickUrl: 'https://www.trae.ai/solo?showJoin=1',
       autoTheme: true,
       autoThemeTarget: '#root'
-    }), 
+    }),
     tsconfigPaths()
   ],
 })

@@ -20,3 +20,5 @@ export {
     Divider,
     EmptyState
 } from './Card';
+
+export { PaywallModal } from './PaywallModal';
