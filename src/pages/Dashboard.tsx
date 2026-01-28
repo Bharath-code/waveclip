@@ -1,8 +1,9 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ConvexProvider, useConvex } from 'convex/react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { AppLayout, PageContainer } from '@/components/layout';
 import { Button, Card, CardHeader, Badge, EmptyState, Skeleton, Modal } from '@/components/ui';
+import { Magnetic } from '@/components/ui/Magnetic';
 import { AudioUploader } from '@/features/upload';
 import { useAudioUpload, useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { formatRelativeTime, formatDuration } from '@/lib/utils';
@@ -20,6 +21,23 @@ import {
   X,
   Check,
 } from 'lucide-react';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 }
+  }
+} as const;
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 300, damping: 24 }
+  }
+} as const;
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -42,113 +60,136 @@ export default function Dashboard() {
 
   return (
     <AppLayout userName="John Doe">
-      <PageContainer>
+      <PageContainer className="noise-overlay min-h-screen pt-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-10"
+        >
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
-              Your Projects
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Dashboard
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">
-              Create and manage your audiogram projects
+            <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">
+              Welcome back! You have <span className="text-indigo-500 font-bold">{projects.length}</span> projects.
             </p>
           </div>
-          <Button
-            variant="primary"
-            leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setShowUploadModal(true)}
-          >
-            New Project
-          </Button>
-        </div>
+          <Magnetic strength={0.2}>
+            <Button
+              variant="primary"
+              size="lg"
+              leftIcon={<Plus className="h-5 w-5" />}
+              className="rounded-2xl shadow-xl shadow-indigo-600/20"
+              onClick={() => setShowUploadModal(true)}
+            >
+              New Project
+            </Button>
+          </Magnetic>
+        </motion.div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <Card className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-              <FolderOpen className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                {stats?.totalProjects ?? projects.length}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10"
+        >
+          <motion.div variants={itemVariants}>
+            <Card variant="glass" className="flex items-center gap-5 border-white/10 dark:bg-slate-900/50">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center shadow-inner">
+                <FolderOpen className="h-7 w-7 text-indigo-500" />
               </div>
-              <div className="text-sm text-slate-500">Total Projects</div>
-            </div>
-          </Card>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white">
+                  {stats?.totalProjects ?? projects.length}
+                </div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Projects</div>
+              </div>
+            </Card>
+          </motion.div>
 
-          <Card className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Sparkles className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                {stats?.exportsThisMonth ?? 0} / 5
+          <motion.div variants={itemVariants}>
+            <Card variant="glass" className="flex items-center gap-5 border-white/10 dark:bg-slate-900/50">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center shadow-inner">
+                <Sparkles className="h-7 w-7 text-emerald-500" />
               </div>
-              <div className="text-sm text-slate-500">Exports This Month</div>
-            </div>
-          </Card>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white">
+                  {stats?.exportsThisMonth ?? 0} / 5
+                </div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Exports This Month</div>
+              </div>
+            </Card>
+          </motion.div>
 
-          <Card className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-              <Clock className="h-6 w-6 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-slate-900 dark:text-white">
-                {formatDuration(stats?.totalDuration ?? 0)}
+          <motion.div variants={itemVariants}>
+            <Card variant="glass" className="flex items-center gap-5 border-white/10 dark:bg-slate-900/50">
+              <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center shadow-inner">
+                <Clock className="h-7 w-7 text-violet-500" />
               </div>
-              <div className="text-sm text-slate-500">Total Audio Time</div>
-            </div>
-          </Card>
-        </div>
+              <div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white">
+                  {formatDuration(stats?.totalDuration ?? 0)}
+                </div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Audio Time</div>
+              </div>
+            </Card>
+          </motion.div>
+        </motion.div>
 
         {/* Quick Upload Drop Zone */}
-        <Card
-          className="mb-8 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors cursor-pointer group"
-          onClick={() => setShowUploadModal(true)}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.4 }}
         >
-          <div className="flex flex-col items-center justify-center py-8">
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 transition-colors">
-              <Upload className="h-8 w-8 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+          <Card
+            variant="default"
+            className="mb-10 border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-all cursor-pointer group rounded-[2rem]"
+            onClick={() => setShowUploadModal(true)}
+          >
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-20 h-20 rounded-3xl bg-white dark:bg-slate-800 shadow-xl border border-slate-100 dark:border-slate-700 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:rotate-3 transition-transform">
+                <Upload className="h-10 w-10 text-indigo-500" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                Drop your audio file here
+              </h3>
+              <p className="text-slate-500 text-sm mb-6 font-medium">
+                MP3, WAV, M4A up to 100MB
+              </p>
+              <Button variant="outline" size="sm" className="rounded-xl px-6 border-slate-200">
+                Browse Files
+              </Button>
             </div>
-            <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-1">
-              Drop your audio file here
-            </h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
-              MP3, WAV, M4A up to 100MB
-            </p>
-            <Button variant="outline" size="sm">
-              Browse Files
-            </Button>
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
 
         {/* Projects List */}
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+        <div className="pb-20">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-6 tracking-tight flex items-center gap-2">
+            <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
             Recent Projects
           </h2>
 
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <Card key={i} className="flex items-center gap-4">
-                  <Skeleton variant="rectangular" width={48} height={48} className="rounded-lg" />
-                  <div className="flex-1">
-                    <Skeleton width="60%" height={20} className="mb-2" />
-                    <Skeleton width="40%" height={16} />
-                  </div>
-                </Card>
+                <Skeleton key={i} variant="rectangular" height={80} className="rounded-2xl" />
               ))}
             </div>
           ) : projects.length === 0 ? (
             <EmptyState
-              icon={<FileAudio className="h-8 w-8" />}
+              icon={<FileAudio className="h-10 w-10 text-slate-300" />}
               title="No projects yet"
               description="Upload your first audio file to create an audiogram"
               action={
                 <Button
                   variant="primary"
-                  leftIcon={<Upload className="h-4 w-4" />}
+                  size="lg"
+                  leftIcon={<Upload className="h-5 w-5" />}
+                  className="rounded-xl"
                   onClick={() => setShowUploadModal(true)}
                 >
                   Upload Audio
@@ -156,11 +197,18 @@ export default function Dashboard() {
               }
             />
           ) : (
-            <div className="space-y-3">
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-4"
+            >
               {projects.map((project) => (
-                <ProjectCard key={project._id} project={project} />
+                <motion.div key={project._id} variants={itemVariants}>
+                  <ProjectCard project={project} />
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
 

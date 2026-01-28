@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Id, Doc } from '../../convex/_generated/dataModel';
@@ -270,7 +271,7 @@ export default function Editor() {
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar - Tools */}
-          <div className="w-16 shrink-0 border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-2 flex flex-col gap-2">
+          <div className="w-20 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl p-3 flex flex-col gap-4">
             <ToolButton icon={Type} label="Captions" active={activePanel === 'captions'} onClick={() => setActivePanel('captions')} />
             <ToolButton icon={Palette} label="Style" active={activePanel === 'style'} onClick={() => setActivePanel('style')} />
             <ToolButton icon={Settings} label="Settings" active={activePanel === 'settings'} onClick={() => setActivePanel('settings')} />
@@ -278,12 +279,15 @@ export default function Editor() {
 
           {/* Center - Preview Canvas */}
           <div className="flex-1 bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-8 overflow-auto">
-            <div
+            <motion.div
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
               className={cn(
-                'bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300',
-                selectedFormat === 'square' && 'w-[400px] h-[400px]',
-                selectedFormat === 'vertical' && 'w-[300px] h-[533px]',
-                selectedFormat === 'horizontal' && 'w-[533px] h-[300px]',
+                'bg-slate-900 rounded-[2.5rem] shadow-2xl overflow-hidden transition-all duration-500 border-8 border-white dark:border-slate-800 shadow-indigo-500/10',
+                selectedFormat === 'square' && 'w-[450px] h-[450px]',
+                selectedFormat === 'vertical' && 'w-[320px] h-[568px]',
+                selectedFormat === 'horizontal' && 'w-[640px] h-[360px]',
               )}
               style={{ transform: `scale(${zoom})` }}
             >
@@ -323,145 +327,156 @@ export default function Editor() {
                   {formatDuration(currentTime)}
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
 
           {/* Right Sidebar - Dynamic Panel */}
-          <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex flex-col overflow-hidden">
-            {activePanel === 'captions' && (
-              <>
-                {selectedCaption ? (
-                  <CaptionEditor
-                    caption={selectedCaption}
-                    onClose={() => setSelectedCaption(null)}
-                    className="flex-1 overflow-y-auto"
-                  />
-                ) : (
-                  <CaptionTimeline
-                    projectId={projectId as Id<'projects'>}
-                    currentTime={currentTime}
-                    duration={duration}
-                    onSeek={(time) => {
-                      if (audioRef.current) {
-                        audioRef.current.currentTime = time;
-                        setCurrentTime(time);
-                      }
-                    }}
-                    onCaptionSelect={(caption) => setSelectedCaption(caption)}
-                    selectedCaptionId={selectedCaption?._id}
-                    className="flex-1 overflow-hidden"
-                  />
-                )}
-              </>
-            )}
-
-            {activePanel === 'style' && (
-              <div className="p-4 overflow-y-auto">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
-                  Export Format
-                </h3>
-                <div className="space-y-2">
-                  {formatPresets.map((format) => (
-                    <button
-                      key={format.id}
-                      onClick={() => setSelectedFormat(format.id)}
-                      className={cn(
-                        'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
-                        selectedFormat === format.id
-                          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
-                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
-                      )}
-                    >
-                      <format.icon className={cn(
-                        'h-5 w-5',
-                        selectedFormat === format.id
-                          ? 'text-indigo-600'
-                          : 'text-slate-400'
-                      )} />
-                      <div className="text-left">
-                        <p className={cn(
-                          'text-sm font-medium',
-                          selectedFormat === format.id
-                            ? 'text-indigo-600'
-                            : 'text-slate-700 dark:text-slate-300'
-                        )}>
-                          {format.label}
-                        </p>
-                        <p className="text-xs text-slate-500">{format.ratio}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Zoom Controls */}
-                <div className="mt-6">
-                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
-                    Preview Zoom
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
-                      disabled={zoom <= 0.5}
-                    >
-                      <ZoomOut className="h-4 w-4" />
-                    </Button>
-                    <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full">
-                      <div
-                        className="h-full bg-indigo-500 rounded-full transition-all"
-                        style={{ width: `${((zoom - 0.5) / 1) * 100}%` }}
+          <div className="w-80 shrink-0 border-l border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl flex flex-col overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activePanel}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                {activePanel === 'captions' && (
+                  <>
+                    {selectedCaption ? (
+                      <CaptionEditor
+                        caption={selectedCaption}
+                        onClose={() => setSelectedCaption(null)}
+                        className="flex-1 overflow-y-auto"
                       />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
-                      disabled={zoom >= 1.5}
-                    >
-                      <ZoomIn className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-slate-500 text-center mt-2">
-                    {Math.round(zoom * 100)}%
-                  </p>
-                </div>
-              </div>
-            )}
+                    ) : (
+                      <CaptionTimeline
+                        projectId={projectId as Id<'projects'>}
+                        currentTime={currentTime}
+                        duration={duration}
+                        onSeek={(time) => {
+                          if (audioRef.current) {
+                            audioRef.current.currentTime = time;
+                            setCurrentTime(time);
+                          }
+                        }}
+                        onCaptionSelect={(caption) => setSelectedCaption(caption)}
+                        selectedCaptionId={selectedCaption?._id}
+                        className="flex-1 overflow-hidden"
+                      />
+                    )}
+                  </>
+                )}
 
-            {activePanel === 'settings' && (
-              <div className="p-4 overflow-y-auto">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
-                  Project Settings
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Project Title
-                    </label>
-                    <p className="text-sm text-slate-900 dark:text-white">
-                      {project?.title || 'Untitled'}
-                    </p>
+                {activePanel === 'style' && (
+                  <div className="p-4 overflow-y-auto">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
+                      Export Format
+                    </h3>
+                    <div className="space-y-2">
+                      {formatPresets.map((format) => (
+                        <button
+                          key={format.id}
+                          onClick={() => setSelectedFormat(format.id)}
+                          className={cn(
+                            'w-full flex items-center gap-3 p-3 rounded-lg border transition-all',
+                            selectedFormat === format.id
+                              ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
+                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                          )}
+                        >
+                          <format.icon className={cn(
+                            'h-5 w-5',
+                            selectedFormat === format.id
+                              ? 'text-indigo-600'
+                              : 'text-slate-400'
+                          )} />
+                          <div className="text-left">
+                            <p className={cn(
+                              'text-sm font-medium',
+                              selectedFormat === format.id
+                                ? 'text-indigo-600'
+                                : 'text-slate-700 dark:text-slate-300'
+                            )}>
+                              {format.label}
+                            </p>
+                            <p className="text-xs text-slate-500">{format.ratio}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Zoom Controls */}
+                    <div className="mt-6">
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">
+                        Preview Zoom
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                          disabled={zoom <= 0.5}
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full">
+                          <div
+                            className="h-full bg-indigo-500 rounded-full transition-all"
+                            style={{ width: `${((zoom - 0.5) / 1) * 100}%` }}
+                          />
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setZoom(Math.min(1.5, zoom + 0.1))}
+                          disabled={zoom >= 1.5}
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-slate-500 text-center mt-2">
+                        {Math.round(zoom * 100)}%
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Duration
-                    </label>
-                    <p className="text-sm text-slate-900 dark:text-white">
-                      {formatDuration(project?.duration || 0)}
-                    </p>
+                )}
+
+                {activePanel === 'settings' && (
+                  <div className="p-4 overflow-y-auto">
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4">
+                      Project Settings
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          Project Title
+                        </label>
+                        <p className="text-sm text-slate-900 dark:text-white">
+                          {project?.title || 'Untitled'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          Duration
+                        </label>
+                        <p className="text-sm text-slate-900 dark:text-white">
+                          {formatDuration(project?.duration || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          Captions
+                        </label>
+                        <p className="text-sm text-slate-900 dark:text-white">
+                          {captions?.length || 0} segments
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Captions
-                    </label>
-                    <p className="text-sm text-slate-900 dark:text-white">
-                      {captions?.length || 0} segments
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
@@ -551,18 +566,27 @@ export default function Editor() {
 // ─── Tool Button Component ───
 function ToolButton({ icon: Icon, label, active = false, onClick }: { icon: any; label: string; active?: boolean; onClick?: () => void }) {
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
       onClick={onClick}
       className={cn(
-        'w-12 h-12 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors',
+        'w-14 h-14 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all duration-300 relative group',
         active
-          ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400'
-          : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+          : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
       )}
       title={label}
     >
-      <Icon className="h-5 w-5" />
-      <span className="text-[10px] font-medium">{label}</span>
-    </button>
+      {active && (
+        <motion.div
+          layoutId="activeTool"
+          className="absolute inset-0 bg-indigo-600 rounded-2xl -z-10"
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+        />
+      )}
+      <Icon className={cn("h-5 w-5 transition-transform group-hover:scale-110", active && "text-white")} />
+      <span className={cn("text-[10px] font-bold tracking-tight uppercase", active ? "text-white" : "text-slate-500")}>{label}</span>
+    </motion.button>
   );
 }

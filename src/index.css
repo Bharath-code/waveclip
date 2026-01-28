@@ -203,10 +203,52 @@ body {
 
 /* ─── Glass Effect ─── */
 .glass {
-  background: rgb(var(--color-bg-elevated) / 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgb(var(--color-border) / 0.5);
+  background: rgb(var(--color-bg-elevated) / 0.6);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgb(var(--color-border) / 0.3);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass {
+  background: rgb(var(--color-bg-elevated) / 0.4);
+  border: 1px solid rgb(var(--color-border) / 0.2);
+}
+
+/* ─── Noise Texture ─── */
+.noise-overlay {
+  position: relative;
+}
+
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* ─── Advanced Shadows ─── */
+.shadow-premium {
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.shadow-glow-indigo {
+  box-shadow: 0 0 20px -5px rgb(99 102 241 / 0.5);
+}
+
+/* ─── Mesh Gradient ─── */
+.mesh-gradient {
+  background-color: rgb(var(--color-bg));
+  background-image:
+    radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
+    radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 1) 0, transparent 50%),
+    radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 1) 0, transparent 50%);
 }
 
 /* ─── Shimmer Animation ─── */

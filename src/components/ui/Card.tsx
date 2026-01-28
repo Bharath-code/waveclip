@@ -1,9 +1,9 @@
-import React from 'react';
+import { motion, HTMLMotionProps } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
 // ─── Card Component ───
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-    variant?: 'default' | 'elevated' | 'outlined' | 'ghost';
+interface CardProps extends HTMLMotionProps<'div'> {
+    variant?: 'default' | 'elevated' | 'outlined' | 'ghost' | 'glass';
     padding?: 'none' | 'sm' | 'md' | 'lg';
     hoverable?: boolean;
 }
@@ -17,9 +17,10 @@ const paddingStyles = {
 
 const variantStyles = {
     default: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm',
-    elevated: 'bg-white dark:bg-slate-800 shadow-lg',
+    elevated: 'bg-white dark:bg-slate-800 shadow-xl border border-slate-200 dark:border-slate-700',
     outlined: 'bg-transparent border-2 border-slate-200 dark:border-slate-700',
-    ghost: 'bg-slate-50 dark:bg-slate-800/50',
+    ghost: 'bg-slate-50 dark:bg-slate-800/50 border border-transparent',
+    glass: 'glass border-white/20 dark:border-white/10 shadow-premium',
 };
 
 export function Card({
@@ -30,19 +31,26 @@ export function Card({
     children,
     ...props
 }: CardProps) {
+    const motionProps = hoverable ? {
+        whileHover: { y: -4, scale: 1.01 },
+        whileTap: { scale: 0.98 },
+        transition: { type: 'spring', stiffness: 400, damping: 25 } as const
+    } : {};
+
     return (
-        <div
+        <motion.div
             className={cn(
-                'rounded-xl',
+                'rounded-2xl',
                 variantStyles[variant],
                 paddingStyles[padding],
-                hoverable && 'transition-all duration-200 hover:shadow-lg hover:scale-[1.02]',
+                hoverable && 'cursor-pointer',
                 className
             )}
+            {...motionProps}
             {...props}
         >
             {children}
-        </div>
+        </motion.div>
     );
 }
 
