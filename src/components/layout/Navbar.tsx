@@ -12,6 +12,8 @@ import {
     Settings,
     LogOut,
     Sparkles,
+    Sun,
+    Moon,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -23,6 +25,28 @@ interface NavbarProps {
 export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarProps) {
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
     const location = useLocation();
+
+    // Dark mode state
+    const [isDark, setIsDark] = React.useState(() => {
+        if (typeof window !== 'undefined') {
+            return document.documentElement.classList.contains('dark') ||
+                window.matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+        return false;
+    });
+
+    React.useEffect(() => {
+        const root = window.document.documentElement;
+        if (isDark) {
+            root.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            root.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        }
+    }, [isDark]);
+
+    const toggleTheme = () => setIsDark(!isDark);
 
     const navLinks = [
         { label: 'Features', href: '/#features' },
@@ -85,8 +109,16 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                         ))}
                     </div>
 
-                    {/* Desktop Auth Buttons */}
+                    {/* Desktop Auth Buttons & Theme Toggle */}
                     <div className="hidden md:flex items-center gap-3">
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors mr-2"
+                            aria-label="Toggle theme"
+                        >
+                            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                        </button>
+
                         {isAuthenticated ? (
                             <>
                                 <span className="text-sm text-slate-600 dark:text-slate-300">
@@ -123,18 +155,27 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                         )}
                     </div>
 
-                    {/* Mobile Menu Button */}
-                    <button
-                        className="md:hidden p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                        aria-label="Toggle menu"
-                    >
-                        {mobileMenuOpen ? (
-                            <X className="h-6 w-6" />
-                        ) : (
-                            <Menu className="h-6 w-6" />
-                        )}
-                    </button>
+                    {/* Mobile Menu Button & Theme Toggle */}
+                    <div className="md:hidden flex items-center gap-2">
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                            aria-label="Toggle theme"
+                        >
+                            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                        </button>
+                        <button
+                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                            aria-label="Toggle menu"
+                        >
+                            {mobileMenuOpen ? (
+                                <X className="h-6 w-6" />
+                            ) : (
+                                <Menu className="h-6 w-6" />
+                            )}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Mobile Menu */}

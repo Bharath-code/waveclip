@@ -9,6 +9,7 @@ import { Button, Card, Badge, Spinner, Modal } from '@/components/ui';
 import { useProject, useUpdateProject } from '@/hooks/useProjects';
 import { WaveformPlayer } from '@/hooks/useWaveform';
 import { CaptionTimeline, CaptionEditor } from '@/features/captions';
+import { useEditorStore } from '@/store/editorStore';
 import { cn, formatDuration } from '@/lib/utils';
 import {
   ArrowLeft,
@@ -51,17 +52,19 @@ export default function Editor() {
   const { project, isLoading } = useProject(projectId as Id<"projects"> | null);
   const { updateProject } = useUpdateProject();
 
-  // Editor state
-  const [isPlaying, setIsPlaying] = React.useState(false);
-  const [isMuted, setIsMuted] = React.useState(false);
-  const [currentTime, setCurrentTime] = React.useState(0);
-  const [duration, setDuration] = React.useState(0);
-  const [selectedFormat, setSelectedFormat] = React.useState('square');
-  const [zoom, setZoom] = React.useState(1);
-  const [isTranscribing, setIsTranscribing] = React.useState(false);
-  const [transcriptionStatus, setTranscriptionStatus] = React.useState<'idle' | 'success' | 'error'>('idle');
-  const [activePanel, setActivePanel] = React.useState<'captions' | 'style' | 'settings'>('captions');
-  const [selectedCaption, setSelectedCaption] = React.useState<Doc<'captions'> | null>(null);
+  // Editor state from Zustand Store
+  const {
+    isPlaying, setIsPlaying,
+    isMuted, setIsMuted,
+    currentTime, setCurrentTime,
+    duration, setDuration,
+    selectedFormat, setSelectedFormat,
+    zoom, setZoom,
+    isTranscribing, setIsTranscribing,
+    transcriptionStatus, setTranscriptionStatus,
+    activePanel, setActivePanel,
+    selectedCaption, setSelectedCaption,
+  } = useEditorStore();
 
   // Load captions
   const captions = useQuery(
@@ -80,30 +83,112 @@ export default function Editor() {
   // Audio element ref
   const audioRef = React.useRef<HTMLAudioElement>(null);
 
-  // Waveform visualization (mock data fallback)
-  const waveformBars = React.useMemo(() =>
-    [...Array(100)].map(() => 20 + Math.random() * 60),
-    []
-  );
+  // Waveform visualization
+  const [realWaveformBars, setRealWaveformBars] = React.useState<number[]>([]);
+
+  React.useEffect(() => {
+    if (!project?.audioUrl) return;
+
+    let isMounted = true;
+    const fetchAudioData = async () => {
+      try {
+        const response = await fetch(project.audioUrl!);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioContext = new AudioContext();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        audioContext.close();
+
+        if (!isMounted) return;
+
+        const channelData = audioBuffer.getChannelData(0);
+        const numBars = 100;
+        const samplesPerBar = Math.floor(channelData.length / numBars);
+        const bars: number[] = [];
+
+        for (let i = 0; i < numBars; i++) {
+          const start = i * samplesPerBar;
+          const end = start + samplesPerBar;
+          let max = 0;
+          for (let j = start; j < end && j < channelData.length; j++) {
+            const abs = Math.abs(channelData[j]);
+            if (abs > max) max = abs;
+          }
+          bars.push(Math.max(2, max * 100)); // Scale 0-1 to 0-100%, min 2%
+        }
+        setRealWaveformBars(bars);
+      } catch (error) {
+        console.error("Failed to generate waveform:", error);
+      }
+    };
+
+    fetchAudioData();
+    return () => { isMounted = false; };
+  }, [project?.audioUrl]);
+
+  const waveformBars = realWaveformBars.length > 0
+    ? realWaveformBars
+    : React.useMemo(() => [...Array(100)].map(() => 20 + Math.random() * 60), []);
 
   // Load audio metadata
   React.useEffect(() => {
     if (project?.duration) {
       setDuration(project.duration);
     }
-  }, [project]);
+  }, [project, setDuration]);
 
   // Handle audio playback
-  const handlePlayPause = () => {
+  const handlePlayPause = React.useCallback(() => {
     if (audioRef.current) {
-      if (isPlaying) {
+      if (!audioRef.current.paused) {
         audioRef.current.pause();
       } else {
         audioRef.current.play();
       }
-      setIsPlaying(!isPlaying);
+      setIsPlaying(!audioRef.current.paused);
     }
-  };
+  }, [setIsPlaying]);
+
+  // Keyboard Shortcuts
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when interacting with input fields
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          handlePlayPause();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (audioRef.current) {
+            audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5);
+          }
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (audioRef.current && duration > 0) {
+            audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 5);
+          }
+          break;
+        case 'Equal': // + key
+        case 'NumpadAdd':
+          e.preventDefault();
+          setZoom(Math.min(1.5, zoom + 0.1));
+          break;
+        case 'Minus': // - key
+        case 'NumpadSubtract':
+          e.preventDefault();
+          setZoom(Math.max(0.5, zoom - 0.1));
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handlePlayPause, duration, setZoom]);
 
   const handleTimeUpdate = () => {
     if (audioRef.current) {

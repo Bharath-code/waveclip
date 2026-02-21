@@ -3,6 +3,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 interface UseFFmpegReturn {
+    ffmpeg: FFmpeg | null;
     isLoaded: boolean;
     isLoading: boolean;
     loadError: string | null;
@@ -15,7 +16,6 @@ interface UseFFmpegReturn {
 
 interface VideoGenerationOptions {
     audioBlob: Blob;
-    waveformFrames: string[]; // Base64 encoded frame images
     duration: number; // in seconds
     fps?: number;
     width: number;
@@ -80,7 +80,6 @@ export function useFFmpeg(): UseFFmpegReturn {
 
             const {
                 audioBlob,
-                waveformFrames,
                 duration,
                 fps = 30,
                 width,
@@ -96,14 +95,6 @@ export function useFFmpeg(): UseFFmpegReturn {
                 // Write audio file
                 const audioData = await fetchFile(audioBlob);
                 await ffmpegInstance.writeFile('audio.mp3', audioData);
-
-                // Write frame images
-                for (let i = 0; i < waveformFrames.length; i++) {
-                    const frameData = waveformFrames[i];
-                    const frameBlob = await (await fetch(frameData)).blob();
-                    const frameArray = await fetchFile(frameBlob);
-                    await ffmpegInstance.writeFile(`frame${String(i).padStart(5, '0')}.png`, frameArray);
-                }
 
                 // Generate video from frames + audio
                 const outputFile = `output.${outputFormat}`;
@@ -125,14 +116,14 @@ export function useFFmpeg(): UseFFmpegReturn {
 
                 // Read output file
                 const data = await ffmpegInstance.readFile(outputFile);
-                const videoBlob = new Blob([data], {
+                const videoBlob = new Blob([data as BlobPart], {
                     type: outputFormat === 'mp4' ? 'video/mp4' : 'video/webm'
                 });
 
                 // Cleanup
                 await ffmpegInstance.deleteFile('audio.mp3');
                 await ffmpegInstance.deleteFile(outputFile);
-                for (let i = 0; i < waveformFrames.length; i++) {
+                for (let i = 0; i < Math.ceil(duration * fps); i++) {
                     try {
                         await ffmpegInstance.deleteFile(`frame${String(i).padStart(5, '0')}.png`);
                     } catch {
@@ -161,6 +152,7 @@ export function useFFmpeg(): UseFFmpegReturn {
     }, []);
 
     return {
+        ffmpeg: ffmpegInstance,
         isLoaded,
         isLoading,
         loadError,
@@ -187,6 +179,7 @@ export interface CaptionSegment {
 }
 
 interface WaveformRendererOptions {
+    ffmpeg: FFmpeg;
     audioBuffer: AudioBuffer;
     width: number;
     height: number;
@@ -202,8 +195,9 @@ interface WaveformRendererOptions {
 export async function generateWaveformFrames(
     options: WaveformRendererOptions,
     onProgress?: (progress: number) => void
-): Promise<string[]> {
+): Promise<void> {
     const {
+        ffmpeg,
         audioBuffer,
         width,
         height,
@@ -218,7 +212,6 @@ export async function generateWaveformFrames(
 
     const duration = audioBuffer.duration;
     const totalFrames = Math.ceil(duration * fps);
-    const frames: string[] = [];
 
     // Create canvas
     const canvas = document.createElement('canvas');
@@ -322,8 +315,12 @@ export async function generateWaveformFrames(
             ctx.fillText(activeCaption.text, width / 2, textY);
         }
 
-        // Convert to base64
-        frames.push(canvas.toDataURL('image/png'));
+        // Write to FFmpeg directly
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+        if (blob) {
+            const frameArray = await fetchFile(blob);
+            await ffmpeg.writeFile(`frame${String(frame).padStart(5, '0')}.png`, frameArray);
+        }
 
         if (onProgress) {
             onProgress((frame / totalFrames) * 100);
@@ -335,12 +332,13 @@ export async function generateWaveformFrames(
         }
     }
 
-    return frames;
 }
 
 // ─── Audio Buffer Loader ───
 export async function loadAudioBuffer(file: File): Promise<AudioBuffer> {
     const arrayBuffer = await file.arrayBuffer();
     const audioContext = new AudioContext();
-    return audioContext.decodeAudioData(arrayBuffer);
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    audioContext.close();
+    return audioBuffer;
 }

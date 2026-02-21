@@ -242,42 +242,38 @@ export function WaveformPlayer({
     };
 
     return (
-        <div className= { className } >
-        {/* Waveform Container */ }
-        < div
-    ref = { containerRef }
-    className = "w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800"
-        />
+        <div className={className}>
+            {/* Waveform Container */}
+            <div
+                ref={containerRef}
+                className="w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800"
+            />
 
-        {/* Controls */ }
-    {
-        showControls && (
-            <div className="flex items-center justify-between mt-4" >
-                <button
-            onClick={ toggle }
-        disabled = {!isReady
-    }
-    className = "w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-        >
-        {
-            isPlaying?(
-              <svg className = "w-5 h-5" fill = "currentColor" viewBox = "0 0 24 24" >
-                    <rect x="6" y = "4" width = "4" height = "16" rx = "1" />
-                        <rect x="14" y = "4" width = "4" height = "16" rx = "1" />
+            {/* Controls */}
+            {showControls && (
+                <div className="flex items-center justify-between mt-4">
+                    <button
+                        onClick={toggle}
+                        disabled={!isReady}
+                        className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                        {isPlaying ? (
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="4" width="4" height="16" rx="1" />
+                                <rect x="14" y="4" width="4" height="16" rx="1" />
                             </svg>
-            ): (
-                    <svg className = "w-5 h-5 ml-1" fill = "currentColor" viewBox = "0 0 24 24">
-                <path d = "M8 5v14l11-7z" />
-        </svg>
-            )
-}
-</button>
+                        ) : (
+                            <svg className="w-5 h-5 ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        )}
+                    </button>
 
-    < div className = "text-sm text-slate-600 dark:text-slate-400 font-mono" >
-        { formatTime(currentTime) } / { formatTime(duration) }
+                    <div className="text-sm text-slate-600 dark:text-slate-400 font-mono">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                    </div>
+                </div>
+            )}
         </div>
-        </div>
-      )}
-</div>
-  );
+    );
 }

@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import React from "react";
@@ -165,14 +165,20 @@ async function extractAudioMetadata(file: File): Promise<AudioMetadata> {
 }
 
 // ─── Projects List Hook ───
-export function useProjects(limit?: number) {
-    const projects = useQuery(api.projects.list, { limit });
+export function useProjects(numItems: number = 10) {
+    const { results, status, loadMore } = usePaginatedQuery(
+        api.projects.list,
+        {},
+        { initialNumItems: numItems }
+    );
     const stats = useQuery(api.projects.getStats, {});
 
     return {
-        projects: projects || [],
+        projects: results || [],
         stats,
-        isLoading: projects === undefined,
+        isLoading: status === "LoadingFirstPage",
+        hasMore: status === "CanLoadMore",
+        loadMore: () => loadMore(numItems),
     };
 }
 

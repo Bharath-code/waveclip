@@ -67,6 +67,7 @@ export default function Export() {
     isProcessing,
     load: loadFFmpeg,
     generateVideo,
+    ffmpeg,
   } = useFFmpeg();
 
   // Export state
@@ -107,6 +108,29 @@ export default function Export() {
     }
   }, [ffmpegProgress, status]);
 
+  const handleShare = async (platformId: string) => {
+    if (!videoBlob) return;
+
+    if (!navigator.share) {
+      handleDownload();
+      return;
+    }
+
+    try {
+      const file = new File([videoBlob], `${project?.title || 'audiogram'}.mp4`, { type: 'video/mp4' });
+      await navigator.share({
+        title: project?.title || 'Audiogram',
+        text: 'Check out this audiogram I made with WaveClip!',
+        files: [file]
+      });
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Error sharing:', err);
+        handleDownload();
+      }
+    }
+  };
+
   const handleExport = async () => {
     // Check export limit
     if (exportLimit && !exportLimit.allowed) {
@@ -144,6 +168,7 @@ export default function Export() {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      audioContext.close();
       setProgress(20);
 
       // Step 3: Generate waveform frames with captions (20-50%)
@@ -155,16 +180,21 @@ export default function Export() {
         style: c.style,
       }));
 
-      const frames = await generateWaveformFrames(
+      if (!ffmpeg) throw new Error('FFmpeg not initialized');
+
+      const settings = project.settings || {};
+
+      await generateWaveformFrames(
         {
+          ffmpeg,
           audioBuffer,
           width: selectedFormat.width,
           height: selectedFormat.height,
-          barWidth: 6,
-          barGap: 3,
-          barColor: 'rgba(255, 255, 255, 0.4)',
-          progressColor: '#ffffff',
-          backgroundColor: '#6366f1', // Indigo
+          barWidth: settings.barWidth || 6,
+          barGap: settings.barGap || 3,
+          barColor: settings.barColor || 'rgba(255, 255, 255, 0.4)',
+          progressColor: settings.progressColor || '#ffffff',
+          backgroundColor: settings.backgroundColor || '#6366f1',
           fps: 30,
           captions: captionSegments,
         },
@@ -177,7 +207,6 @@ export default function Export() {
       setStatus('rendering');
       const video = await generateVideo({
         audioBlob,
-        waveformFrames: frames,
         duration: audioBuffer.duration,
         fps: 30,
         width: selectedFormat.width,
@@ -598,7 +627,12 @@ export default function Export() {
                 {/* Social Share Buttons */}
                 <div className="grid grid-cols-4 gap-3">
                   {socialPlatforms.map((platform) => (
-                    <Button key={platform.id} variant="outline" className="flex-col h-auto py-4">
+                    <Button
+                      key={platform.id}
+                      variant="outline"
+                      className="flex-col h-auto py-4"
+                      onClick={() => handleShare(platform.id)}
+                    >
                       <platform.icon className="h-5 w-5 mb-1" />
                       <span className="text-xs">{platform.label}</span>
                     </Button>

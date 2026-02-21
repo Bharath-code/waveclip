@@ -42,7 +42,7 @@ const itemVariants = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [showUploadModal, setShowUploadModal] = React.useState(false);
-  const { projects, stats, isLoading } = useProjects(10);
+  const { projects, stats, isLoading, hasMore, loadMore } = useProjects(10);
   const { uploadState, uploadAudio, reset: resetUpload } = useAudioUpload();
 
   // Handle file upload completion
@@ -72,7 +72,7 @@ export default function Dashboard() {
               Dashboard
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">
-              Welcome back! You have <span className="text-indigo-500 font-bold">{projects.length}</span> projects.
+              Welcome back! You have <span className="text-indigo-500 font-bold">{stats?.totalProjects ?? 0}</span> projects.
             </p>
           </div>
           <Magnetic strength={0.2}>
@@ -102,7 +102,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <div className="text-2xl font-black text-slate-900 dark:text-white">
-                  {stats?.totalProjects ?? projects.length}
+                  {stats?.totalProjects ?? 0}
                 </div>
                 <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">Total Projects</div>
               </div>
@@ -185,15 +185,29 @@ export default function Dashboard() {
               title="No projects yet"
               description="Upload your first audio file to create an audiogram"
               action={
-                <Button
-                  variant="primary"
-                  size="lg"
-                  leftIcon={<Upload className="h-5 w-5" />}
-                  className="rounded-xl"
-                  onClick={() => setShowUploadModal(true)}
-                >
-                  Upload Audio
-                </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    leftIcon={<Upload className="h-5 w-5" />}
+                    className="rounded-xl shadow-lg shadow-indigo-600/20"
+                    onClick={() => setShowUploadModal(true)}
+                  >
+                    Upload Audio
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    leftIcon={<Play className="h-5 w-5" />}
+                    className="rounded-xl bg-white"
+                    onClick={() => {
+                      // In a real app, this would load a pre-existing demo project
+                      alert("Loading sample audio...");
+                    }}
+                  >
+                    Try Sample Audio
+                  </Button>
+                </div>
               }
             />
           ) : (
@@ -208,6 +222,14 @@ export default function Dashboard() {
                   <ProjectCard project={project} />
                 </motion.div>
               ))}
+
+              {hasMore && (
+                <div className="flex justify-center pt-8 pb-4">
+                  <Button variant="outline" onClick={() => loadMore()}>
+                    Load More Projects
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
         </div>

@@ -1,448 +1,476 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { MarketingLayout, PageContainer } from '@/components/layout';
-import { Button, Card, Badge } from '@/components/ui';
-import { Magnetic } from '@/components/ui/Magnetic';
-import { LandingSEO } from '@/components/SEO';
-import {
-  Sparkles,
-  Wand2,
-  FileVideo,
-  Zap,
-  Globe,
-  Lock,
-  ArrowRight,
-  Check,
-  Play,
-  Star,
-  AudioWaveform,
-} from 'lucide-react';
+import { motion, useAnimation, useInView } from 'framer-motion';
+import * as THREE from 'three';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { cn } from '@/lib/utils';
+import { LandingSEO } from '@/components/SEO';
+import { MarketingLayout } from '@/components/layout';
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2,
-    },
-  },
-} as const;
+gsap.registerPlugin(ScrollTrigger);
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: 'spring', stiffness: 260, damping: 20 },
-  },
-} as const;
+// ─── UTILS & SUB-COMPONENTS ───────────────────────────────────────────────
+
+const Icon = ({ icon, className = "", style = {} }: { icon: string; className?: string, style?: any }) => {
+  return (
+    // @ts-ignore
+    <iconify-icon icon={icon} class={className} style={style}></iconify-icon>
+  );
+};
+
+// -- Vertical Slide Down Letter Animation
+const StaggeredText = ({ text, className = "" }: { text: string; className?: string }) => {
+  const letters = text.split("");
+  return (
+    <span className={cn("inline-block overflow-hidden", className)}>
+      {letters.map((char, index) => (
+        <motion.span
+          key={index}
+          initial={{ y: "100%", opacity: 0 }}
+          whileInView={{ y: "0%", opacity: 1 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{
+            duration: 0.6,
+            ease: [0.33, 1, 0.68, 1],
+            delay: index * 0.03,
+          }}
+          className="inline-block"
+        >
+          {char === " " ? "\u00A0" : char}
+        </motion.span>
+      ))}
+    </span>
+  );
+};
+
+// -- Flashlight Card
+const FlashlightCard = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => {
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [isHovered, setIsHovered] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    setMousePosition({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "relative rounded-2xl border border-slate-800 bg-slate-950 overflow-hidden group transition-colors duration-500",
+        className
+      )}
+    >
+      <div
+        className="pointer-events-none absolute -inset-px rounded-2xl opacity-0 transition duration-300 group-hover:opacity-100"
+        style={{
+          background: `radial-gradient(400px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(255,255,255,0.1), transparent 40%)`,
+        }}
+      />
+      {children}
+    </div>
+  );
+};
+
+// -- Pill Button with 1px Border Beam
+const BeamButton = ({ children, onClick }: { children: React.ReactNode, onClick?: () => void }) => {
+  return (
+    <button
+      onClick={onClick}
+      className="relative inline-flex h-14 overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 group"
+    >
+      <span className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)] group-hover:bg-[conic-gradient(from_90deg_at_50%_50%,#fff_0%,#a5b4fc_50%,#fff_100%)] transition-colors duration-500" />
+      <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-8 py-1 text-sm font-semibold tracking-tighter text-white backdrop-blur-3xl group-hover:bg-slate-900 transition-colors">
+        {children}
+      </span>
+    </button>
+  );
+};
+
+// -- Sonar Animation
+const SonarPing = () => (
+  <div className="relative flex items-center justify-center h-12 w-12">
+    <div className="absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-20 animate-ping" style={{ animationDuration: '3s' }} />
+    <div className="absolute inline-flex h-8 w-8 rounded-full bg-indigo-500 opacity-40 animate-ping" style={{ animationDuration: '3s', animationDelay: '0.5s' }} />
+    <div className="relative inline-flex rounded-full h-4 w-4 bg-indigo-500" />
+  </div>
+);
+
+// ─── WEBGL SPLIT IMAGE COMPONENT ──────────────────────────────────────────
+
+const WebGLSplitImage = ({ src }: { src: string }) => {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const scrollData = useRef({ velocity: 0, targetOffsets: [0, 0, 0, 0], currentOffsets: [0, 0, 0, 0] });
+
+  useEffect(() => {
+    if (!mountRef.current) return;
+    const container = mountRef.current;
+
+    // ThreeJS Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.setCrossOrigin("anonymous");
+
+    // Custom Shader
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uTexture: { value: null },
+        uOffsets: { value: [0, 0, 0, 0] },
+        uResolution: { value: new THREE.Vector2(container.clientWidth, container.clientHeight) }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uTexture;
+        uniform float uOffsets[4];
+        uniform vec2 uResolution;
+        varying vec2 vUv;
+
+        // Simple motion blur using offset sampling
+        vec4 sampleBlurred(sampler2D tex, vec2 uv, float offset) {
+            vec2 dir = vec2(0.0, offset * 0.05); // Blur direction based on velocity
+            vec4 color = vec4(0.0);
+            float samples = 5.0;
+            for(float i = -2.0; i <= 2.0; i++) {
+                vec2 sampleUv = uv + dir * (i / samples);
+                sampleUv.y = fract(sampleUv.y); // wrap texture vertically
+                color += texture2D(tex, sampleUv);
+            }
+            return color / samples;
+        }
+
+        void main() {
+          float colIndex = floor(vUv.x * 4.0);
+          float offset = 0.0;
+          
+          if (colIndex < 1.0) offset = uOffsets[0];
+          else if (colIndex < 2.0) offset = uOffsets[1];
+          else if (colIndex < 3.0) offset = uOffsets[2];
+          else offset = uOffsets[3];
+
+          vec2 finalUv = vUv;
+          finalUv.y = fract(finalUv.y + offset); // Use fract to loop the image
+          
+          // Add 1px vertical borders between columns
+          float line = 0.0;
+          float pxWidth = 1.0 / uResolution.x;
+          if (abs(vUv.x - 0.25) < pxWidth || abs(vUv.x - 0.5) < pxWidth || abs(vUv.x - 0.75) < pxWidth) {
+              line = 1.0;
+          }
+
+          vec4 texColor = sampleBlurred(uTexture, finalUv, offset);
+          
+          // Draw thin container lines over texture
+          vec3 mixedColor = mix(texColor.rgb, vec3(0.2), line * 0.3);
+          gl_FragColor = vec4(mixedColor, 1.0);
+        }
+      `
+    });
+
+    textureLoader.load(src, (texture) => {
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.minFilter = THREE.LinearFilter;
+      material.uniforms.uTexture.value = texture;
+    });
+
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    // Scroll tracking
+    let lastScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const velocity = (currentScrollY - lastScrollY) * 0.001; // Scaled velocity
+      scrollData.current.velocity = velocity;
+      lastScrollY = currentScrollY;
+
+      // Outer columns lag (slower), inner columns race ahead (faster)
+      scrollData.current.targetOffsets[0] += velocity * 0.5;
+      scrollData.current.targetOffsets[1] += velocity * 1.5;
+      scrollData.current.targetOffsets[2] += velocity * 1.5;
+      scrollData.current.targetOffsets[3] += velocity * 0.5;
+    };
+
+    window.addEventListener('scroll', handleScroll);
+
+    // Animation loop (Lerp for smooth snapping/blur)
+    let animationFrameId: number;
+    const render = () => {
+      const data = scrollData.current;
+
+      // Decelerate velocity for snap effect
+      data.velocity *= 0.9;
+
+      // Interpolate current offsets towards target offsets for smoothness
+      for (let i = 0; i < 4; i++) {
+        data.currentOffsets[i] += (data.targetOffsets[i] - data.currentOffsets[i]) * 0.1;
+      }
+
+      material.uniforms.uOffsets.value = [...data.currentOffsets];
+      renderer.render(scene, camera);
+      animationFrameId = requestAnimationFrame(render);
+    };
+    render();
+
+    const handleResize = () => {
+      if (container) {
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        material.uniforms.uResolution.value.set(container.clientWidth, container.clientHeight);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+      container.removeChild(renderer.domElement);
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+    };
+  }, [src]);
+
+  return <div ref={mountRef} className="w-full h-full absolute inset-0" />;
+};
+
+
+// ─── MAIN LANDING COMPONENT ───────────────────────────────────────────────
 
 export default function Landing() {
+  const companyLogos = [
+    "simple-icons:nasa", "simple-icons:spacex", "simple-icons:uber", "simple-icons:visa",
+    "simple-icons:grab", "simple-icons:bose", "simple-icons:discover", "simple-icons:dji",
+    "simple-icons:nikon", "simple-icons:sony"
+  ];
+
   return (
     <MarketingLayout>
       <LandingSEO />
-      {/* Hero Section */}
-      <section className="relative overflow-hidden noise-overlay">
-        {/* Animated Mesh Background */}
-        <div className="absolute inset-0 mesh-gradient opacity-30 dark:opacity-40" />
 
-        {/* Background Blobs with Motion */}
-        <motion.div
-          animate={{ scale: [1, 1.2, 1], x: [0, 50, 0] }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-20 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{ scale: [1, 1.1, 1], x: [0, -40, 0] }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute top-40 right-1/4 w-72 h-72 bg-violet-500/20 rounded-full blur-3xl"
-        />
+      <main className="bg-slate-950 min-h-screen text-slate-100 font-sans selection:bg-indigo-500/30">
 
-        <PageContainer className="relative pt-20 pb-24 lg:pt-32 lg:pb-32">
-          <motion.div
-            className="text-center max-w-4xl mx-auto"
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            {/* Badge */}
-            <motion.div variants={itemVariants}>
-              <Badge variant="primary" className="mb-6 px-4 py-1.5 shadow-glow-indigo border-indigo-400/30">
-                <Sparkles className="h-4 w-4 mr-2 text-indigo-400" />
-                AI-Powered Audiogram Generator
-              </Badge>
-            </motion.div>
+        {/* Global Vertical Grid Lines */}
+        <div className="pointer-events-none fixed inset-0 z-0 flex justify-center container mx-auto px-4 max-w-7xl">
+          <div className="w-full h-full grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-4">
+            {[...Array(13)].map((_, i) => (
+              <div key={i} className="h-full w-px bg-white/[0.03]" />
+            ))}
+          </div>
+        </div>
 
-            {/* Headline */}
-            <motion.h1
-              variants={itemVariants}
-              className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-slate-900 dark:text-white leading-[1.1] mb-6 tracking-tight"
-            >
-              Turn Audio Into{' '}
-              <span className="text-gradient">Viral Social Videos</span>{' '}
-              in Seconds
-            </motion.h1>
+        {/* 1. HERO SECTION */}
+        <section className="relative z-10 pt-32 pb-20 min-h-screen flex flex-col items-center justify-center container mx-auto px-4 max-w-7xl">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[500px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-            {/* Subheadline */}
-            <motion.p
-              variants={itemVariants}
-              className="mt-6 text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed"
-            >
-              Create stunning audiograms with AI-generated captions, beautiful waveforms, and one-click export to all social platforms.
-            </motion.p>
+          <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            <div className="md:col-span-8 md:col-start-3 text-center flex flex-col items-center relative">
 
-            {/* CTA Buttons */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-6"
-            >
-              <Magnetic strength={0.4}>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  rightIcon={<ArrowRight className="h-5 w-5" />}
-                  className="w-full sm:w-auto px-10 h-14 text-lg rounded-2xl shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/30"
-                  onClick={() => window.location.href = '/auth/register'}
-                >
-                  Start Creating Free
-                </Button>
-              </Magnetic>
-              <Magnetic strength={0.3}>
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  leftIcon={<Play className="h-5 w-5" />}
-                  className="h-14 rounded-2xl text-lg hover:bg-slate-100/10"
-                >
-                  Watch Demo
-                </Button>
-              </Magnetic>
-            </motion.div>
+              <SonarPing />
 
-            {/* Social Proof */}
-            <motion.div
-              variants={itemVariants}
-              className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-slate-500 dark:text-slate-400"
-            >
-              <div className="flex items-center gap-1.5 px-4 py-2 bg-slate-100/50 dark:bg-slate-800/50 rounded-full border border-slate-200 dark:border-slate-700">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                ))}
-                <span className="ml-1 font-medium">4.9/5 from 2,000+ creators</span>
+              <h1 className="mt-8 text-6xl md:text-8xl font-black tracking-tighter leading-[0.9] text-white">
+                <StaggeredText text="Aesthetic Audio" />
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-slate-400 via-white to-slate-400">
+                  <StaggeredText text="Engineered for Viral." />
+                </span>
+              </h1>
+
+              <p className="mt-8 text-lg md:text-2xl text-slate-400 font-medium tracking-tight max-w-2xl px-4">
+                The avant-garde editor for zero-latency, typography-driven audiograms. Scale your spoken-word content effortlessly.
+              </p>
+
+              <div className="mt-12 flex flex-col sm:flex-row gap-6">
+                <Link to="/auth/register">
+                  <BeamButton>Deploy Audio →</BeamButton>
+                </Link>
+                <button className="flex items-center gap-3 px-8 py-4 text-sm font-bold tracking-tighter text-slate-300 hover:text-white transition-colors group">
+                  <Icon icon="solar:play-circle-bold-duotone" className="text-2xl group-hover:scale-110 transition-transform" />
+                  View Architecture
+                </button>
               </div>
-              <div className="hidden sm:block w-px h-4 bg-slate-300 dark:bg-slate-700" />
-              <div className="flex items-center gap-2">
-                <Check className="h-4 w-4 text-emerald-500" />
-                No credit card required
+
+            </div>
+          </div>
+        </section>
+
+        {/* 2. INFINITE MARQUEE */}
+        <section className="relative z-10 py-12 border-y border-white/5 bg-slate-950/50 backdrop-blur-md overflow-hidden flex flex-col items-center">
+          <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-slate-950 to-transparent z-20" />
+          <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-slate-950 to-transparent z-20" />
+
+          <p className="text-xs font-bold tracking-widest uppercase text-slate-500 mb-8">Trusted by avant-garde teams</p>
+
+          <div className="flex w-[200%] animate-[marquee_20s_linear_infinite]">
+            <div className="flex w-1/2 justify-around items-center">
+              {companyLogos.map((logo, i) => (
+                <Icon key={i} icon={logo} className="text-4xl text-slate-500 hover:text-white transition-colors duration-300 mx-8" />
+              ))}
+            </div>
+            <div className="flex w-1/2 justify-around items-center">
+              {companyLogos.map((logo, i) => (
+                <Icon key={`dup-${i}`} icon={logo} className="text-4xl text-slate-500 hover:text-white transition-colors duration-300 mx-8" />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 3. WEBGL SHOWCASE SECTION */}
+        <section className="relative z-10 py-32 container mx-auto px-4 max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 h-[70vh]">
+            <div className="md:col-span-4 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-black tracking-widest text-indigo-500 uppercase flex items-center gap-2">
+                  <div className="w-1 h-1 bg-indigo-500 rounded-full" /> 01 WebGL Integration
+                </span>
+                <h2 className="mt-4 text-4xl md:text-5xl font-bold tracking-tighter text-white">
+                  Zero Latency.<br />Infinite Frames.
+                </h2>
+                <p className="mt-6 text-slate-400 tracking-tight leading-relaxed max-w-sm">
+                  Experience buttery-smooth native rendering. Our architecture pushes frames directly to a headless engine, bypassing browser limits entirely.
+                </p>
               </div>
-            </motion.div>
-          </motion.div>
-
-          {/* Hero Image/Preview */}
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.8, ease: "easeOut" }}
-            className="mt-20 relative mx-auto max-w-6xl group"
-          >
-            <div className="relative rounded-[2rem] overflow-hidden shadow-2xl shadow-indigo-500/20 border border-white/20 glass p-2 backdrop-blur-3xl">
-              <div className="bg-white/80 dark:bg-slate-900/80 rounded-[1.5rem] p-8">
-                {/* Header Bar */}
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3.5 h-3.5 rounded-full bg-rose-500 shadow-sm" />
-                    <div className="w-3.5 h-3.5 rounded-full bg-amber-500 shadow-sm" />
-                    <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm" />
-                  </div>
-                  <div className="text-sm font-medium text-slate-500 tracking-wide uppercase">AI Editor Studio</div>
-                  <Badge variant="primary" size="sm">v1.2.0-PRO</Badge>
-                </div>
-
-                {/* Waveform Visualization */}
-                <div className="relative bg-slate-950 rounded-2xl p-12 overflow-hidden group">
-                  <div className="absolute inset-0 mesh-gradient opacity-10" />
-                  <div className="flex items-end justify-center gap-1.5 h-32 relative z-10">
-                    {[...Array(40)].map((_, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ height: "20%" }}
-                        animate={{ height: [`${20 + Math.random() * 60}%`, `${30 + Math.random() * 50}%`, `${20 + Math.random() * 60}%`] }}
-                        transition={{ duration: 2, repeat: Infinity, delay: i * 0.05 }}
-                        className="w-2.5 bg-gradient-to-t from-indigo-500 via-violet-400 to-fuchsia-400 rounded-full"
-                      />
-                    ))}
-                  </div>
-
-                  {/* Caption Overlay */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 1.2 }}
-                    className="absolute bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl"
-                  >
-                    <p className="text-white text-lg font-bold tracking-tight">
-                      "Unlock the true power of your audio content..."
-                    </p>
-                  </motion.div>
-                </div>
+              <div className="pb-8">
+                <Link to="/auth/register" className="group inline-flex items-center gap-2 text-sm font-bold tracking-tighter text-white">
+                  Initialize Protocol
+                  <Icon icon="solar:arrow-right-line-duotone" className="group-hover:translate-x-1 transition-transform" />
+                </Link>
               </div>
             </div>
+            <div className="md:col-span-8 relative rounded-3xl overflow-hidden bg-slate-900 border border-white/10 group">
+              {/* WebGL Component renders in the background */}
+              <WebGLSplitImage src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" />
 
-            {/* Floating Badges */}
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -left-8 top-1/2 hidden lg:block"
-            >
-              <Card variant="glass" className="p-5 backdrop-blur-xl border-white/20">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center shadow-inner">
-                    <Check className="h-6 w-6 text-emerald-400" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">AI Transcribed</div>
-                    <div className="text-xs text-slate-500">99.2% Accuracy</div>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-              className="absolute -right-8 top-1/3 hidden lg:block"
-            >
-              <Card variant="glass" className="p-5 backdrop-blur-xl border-white/20">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-violet-500/20 flex items-center justify-center shadow-inner">
-                    <FileVideo className="h-6 w-6 text-violet-400" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">4K Ready</div>
-                    <div className="text-xs text-slate-500">Auto-Scaling MP4</div>
-                  </div>
-                </div>
-              </Card>
-            </motion.div>
-          </motion.div>
-        </PageContainer>
-      </section>
-
-      {/* Features Section */}
-      <section id="features" className="py-24 lg:py-40 relative">
-        <PageContainer>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-center mb-20"
-          >
-            <Badge variant="outline" className="mb-4 px-4 py-1 uppercase tracking-widest text-[10px] font-bold border-indigo-500/30 text-indigo-400">Features</Badge>
-            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-white mb-6">
-              Everything you need to create{' '}
-              <span className="text-gradient">stunning audiograms</span>
-            </h2>
-            <p className="mt-4 text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
-              From upload to export in under a minute. No video editing skills required.
-            </p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card
-                  variant="default"
-                  hoverable
-                  className="group h-full p-8 border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 transition-colors"
-                >
-                  <div className={cn(
-                    'w-16 h-16 rounded-[1.25rem] flex items-center justify-center mb-8 shadow-inner transition-all duration-300 group-hover:scale-110 group-hover:rotate-3',
-                    feature.iconBg
-                  )}>
-                    <feature.icon className={cn('h-7 w-7', feature.iconColor)} />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-                    {feature.title}
-                  </h3>
-                  <p className="text-lg text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {feature.description}
-                  </p>
-                </Card>
-              </motion.div>
-            ))}
+              {/* Overlay Glass Panel */}
+              <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors duration-700" />
+              <div className="absolute bottom-8 left-8 p-6 bg-slate-950/60 backdrop-blur-xl border border-white/10 rounded-2xl max-w-xs shadow-2xl">
+                <Icon icon="solar:camera-bold-duotone" className="text-3xl text-indigo-400 mb-4" />
+                <h3 className="text-lg font-bold tracking-tighter text-white">Neural Aesthetics</h3>
+                <p className="text-sm text-slate-300 mt-2">Bespoke waveform topology reacting in real-time to vocal cadence.</p>
+              </div>
+            </div>
           </div>
-        </PageContainer>
-      </section>
+        </section>
 
-      {/* Testimonials Section */}
-      <section className="py-24 lg:py-40 bg-slate-50 dark:bg-slate-950/30 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(99,102,241,0.05),transparent)]" />
-        <PageContainer className="relative">
-          <div className="text-center mb-20">
-            <Badge variant="outline" className="mb-4 px-4 py-1 uppercase tracking-widest text-[10px] font-bold border-fuchsia-500/30 text-fuchsia-400">Social Proof</Badge>
-            <h2 className="text-4xl sm:text-5xl font-extrabold text-slate-900 dark:text-white">
-              Loved by <span className="text-gradient">creators worldwide</span>
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.15 }}
-              >
-                <Card variant="glass" className="p-8 h-full flex flex-col justify-between border-white/10">
-                  <div>
-                    <div className="flex items-center gap-1 mb-6">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                    <p className="text-xl text-slate-700 dark:text-slate-200 mb-8 font-medium leading-relaxed italic">
-                      "{testimonial.quote}"
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xl font-bold shadow-xl">
-                      {testimonial.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-slate-900 dark:text-white">{testimonial.name}</p>
-                      <p className="text-slate-500 font-medium">{testimonial.role}</p>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </PageContainer>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 lg:py-40 px-4">
-        <PageContainer>
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="rounded-[3rem] bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-900 relative overflow-hidden p-12 lg:p-24 text-center group"
-          >
-            {/* Decorative Elements */}
-            <div className="absolute inset-0 opacity-20 mesh-gradient" />
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-              className="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-[100px]"
-            />
-            <motion.div
-              animate={{ rotate: -360 }}
-              transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-              className="absolute -bottom-32 -right-32 w-96 h-96 bg-indigo-400/10 rounded-full blur-[100px]"
-            />
-
-            <div className="relative z-10">
-              <h2 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white mb-8 tracking-tight">
-                Ready to go viral?
+        {/* 4. FEATURES GRID */}
+        <section className="relative z-10 py-32 bg-slate-900/50 border-y border-white/5">
+          <div className="container mx-auto px-4 max-w-7xl">
+            <div className="mb-20 text-center max-w-2xl mx-auto">
+              <span className="text-xs font-black tracking-widest text-indigo-500 uppercase">02 Core Logic</span>
+              <h2 className="mt-4 text-4xl md:text-5xl font-bold tracking-tighter text-white">
+                Intentional Minimalism.
               </h2>
-              <p className="text-xl text-indigo-100 mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
-                Join thousands of creators using Audiogram to grow their audience across TikTok, Reels, and YouTube.
-              </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                <Magnetic strength={0.3}>
-                  <Button
-                    size="lg"
-                    className="bg-white text-indigo-700 hover:bg-indigo-50 px-12 h-16 text-xl rounded-[1.5rem] shadow-2xl shadow-black/20"
-                    rightIcon={<ArrowRight className="h-6 w-6" />}
-                    onClick={() => window.location.href = '/auth/register'}
-                  >
-                    Get Started Free
-                  </Button>
-                </Magnetic>
-              </div>
-              <p className="mt-8 text-indigo-200/80 font-medium tracking-wide">
-                Free forever for 5 exports/month • No credit card required
-              </p>
             </div>
-          </motion.div>
-        </PageContainer>
-      </section>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { title: "Kinetic Typography", icon: "solar:text-field-focus-bold-duotone", desc: "Captions that breathe. Words scale and shift based on volume and sentiment context seamlessly." },
+                { title: "Contextual B-Roll", icon: "solar:video-library-bold-duotone", desc: "Machine intelligence automatically queries high-end stock footage matching your spoken topics." },
+                { title: "Headless Pipeline", icon: "solar:server-square-bold-duotone", desc: "Drop tasks into the QStash architecture. Cloud containers rip through 4K encoding instantly." }
+              ].map((f, i) => (
+                <FlashlightCard key={i} className="p-8">
+                  <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center mb-6 shadow-inner">
+                    <Icon icon={f.icon} className="text-2xl text-indigo-400" />
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tighter text-white mb-3">{f.title}</h3>
+                  <p className="text-sm text-slate-400 leading-relaxed font-medium">{f.desc}</p>
+                  <div className="mt-8 text-xs font-black text-slate-700 tracking-widest">FUNC_{i + 1}()</div>
+                </FlashlightCard>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 5. AVATAR / TESTIMONIALS */}
+        <section className="relative z-10 py-32 container mx-auto px-4 max-w-7xl">
+          <div className="mb-20 text-center max-w-2xl mx-auto">
+            <span className="text-xs font-black tracking-widest text-indigo-500 uppercase">03 Signal Verification</span>
+            <h2 className="mt-4 text-4xl md:text-5xl font-bold tracking-tighter text-white">
+              Endorsed by the Vanguard.
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {[
+              { img: "https://i.pravatar.cc/150?img=33", name: "Elena Rostova", role: "Design Director @ Automata", quote: "The architectural fidelity here is staggering. It removes 90% of the friction between audio recording and visual deployment." },
+              { img: "https://i.pravatar.cc/150?img=11", name: "Marcus Chen", role: "Founder @ VoxAI", quote: "We migrated our entire podcast clipping pipeline to WaveClip. The typographic execution is unmatched." }
+            ].map((t, i) => (
+              <FlashlightCard key={i} className="p-10 flex flex-col justify-between h-full bg-transparent border-slate-800/50">
+                <Icon icon="solar:quote-right-bold-duotone" className="text-4xl text-slate-800 mb-6" />
+                <p className="text-lg md:text-xl text-slate-300 font-medium tracking-tight mb-10 leading-snug">
+                  "{t.quote}"
+                </p>
+                <div className="flex items-center gap-4 border-t border-slate-800/50 pt-6">
+                  <img src={t.img} alt={t.name} className="w-12 h-12 rounded-full border border-slate-700 grayscale contrast-125" />
+                  <div>
+                    <h4 className="text-sm font-bold tracking-tighter text-white">{t.name}</h4>
+                    <p className="text-xs text-slate-500 tracking-tight">{t.role}</p>
+                  </div>
+                </div>
+              </FlashlightCard>
+            ))}
+          </div>
+        </section>
+
+        {/* 6. CTA / FOOTER */}
+        <footer className="relative z-10 border-t border-white/10 bg-slate-950 py-20 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-t from-indigo-900/10 to-transparent" />
+          <div className="container mx-auto px-4 max-w-7xl relative flex flex-col items-center text-center">
+            <Icon icon="solar:clapperboard-play-bold-duotone" className="text-6xl text-white mb-8 drop-shadow-[0_0_30px_rgba(99,102,241,0.5)]" />
+            <h2 className="text-5xl md:text-7xl font-black tracking-tighter text-white mb-6">
+              Execute Production.
+            </h2>
+            <Link to="/auth/register" className="mt-8">
+              <BeamButton>Deploy Instance Now</BeamButton>
+            </Link>
+
+            <div className="w-full mt-32 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center text-xs text-slate-600 font-bold tracking-widest uppercase">
+              <div className="flex items-center gap-2 mb-4 md:mb-0">
+                <Icon icon="solar:record-circle-linear" className="text-lg" />
+                WaveClip Systems © 2026
+              </div>
+              <div className="flex gap-6">
+                <a href="#" className="hover:text-white transition-colors">Twitter</a>
+                <a href="#" className="hover:text-white transition-colors">GitHub</a>
+                <a href="#" className="hover:text-white transition-colors">Discord</a>
+              </div>
+            </div>
+          </div>
+        </footer>
+
+      </main>
+
+      {/* Global Style Override for Keyframes */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        @keyframes marquee {
+          0% { transform: translateX(0%); }
+          100% { transform: translateX(-50%); }
+        }
+      `}} />
     </MarketingLayout>
   );
 }
-
-// Features data
-const features = [
-  {
-    icon: Wand2,
-    title: 'AI Captions',
-    description: 'Automatic transcription with 99% accuracy using OpenAI Whisper. Edit and style captions with ease.',
-    iconBg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
-    iconColor: 'text-indigo-600 dark:text-indigo-400',
-  },
-  {
-    icon: AudioWaveform,
-    title: 'Live Waveforms',
-    description: 'Choose from multiple waveform styles and colors. Customize every detail to match your brand identity.',
-    iconBg: 'bg-violet-500/10 dark:bg-violet-500/20',
-    iconColor: 'text-violet-600 dark:text-violet-400',
-  },
-  {
-    icon: FileVideo,
-    title: '1-Click Export',
-    description: 'Export to MP4 in any aspect ratio. Optimized for Instagram, TikTok, Twitter, and more platforms.',
-    iconBg: 'bg-fuchsia-500/10 dark:bg-fuchsia-500/20',
-    iconColor: 'text-fuchsia-600 dark:text-fuchsia-400',
-  },
-  {
-    icon: Zap,
-    title: 'Fast Rendering',
-    description: 'Process videos in seconds, not minutes. All rendering happens instantly right in your browser.',
-    iconBg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-  },
-  {
-    icon: Globe,
-    title: 'Multi-Format',
-    description: 'Pre-built templates for every social platform. Square, vertical (9:16), or horizontal (16:9) layouts.',
-    iconBg: 'bg-blue-500/10 dark:bg-blue-500/20',
-    iconColor: 'text-blue-600 dark:text-blue-400',
-  },
-  {
-    icon: Lock,
-    title: 'Privacy First',
-    description: 'Your audio never leaves your browser. We don\'t store or access your content without permission.',
-    iconBg: 'bg-rose-500/10 dark:bg-rose-500/20',
-    iconColor: 'text-rose-600 dark:text-rose-400',
-  },
-];
-
-// Testimonials data
-const testimonials = [
-  {
-    quote: "Waveclip cut my podcast clip creation time from 2 hours to 10 minutes. The AI captions are incredibly accurate!",
-    name: "Priya Sharma",
-    role: "Podcast Host, Tech Talks India",
-  },
-  {
-    quote: "Finally, a tool that actually works. The waveform animations are beautiful and my clips get 3x more engagement.",
-    name: "Rahul Verma",
-    role: "Content Creator, 250K+ followers",
-  },
-  {
-    quote: "As a small creator, I couldn't afford expensive video editors. Waveclip gives me professional results for free.",
-    name: "Ananya Gupta",
-    role: "Independent Musician",
-  },
-];

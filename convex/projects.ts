@@ -68,8 +68,18 @@ export const createFromUpload = mutation({
 export const get = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", identity.email!))
+      .first();
+
+    if (!user) return null;
+
     const project = await ctx.db.get(args.projectId);
-    if (!project) return null;
+    if (!project || project.userId !== user._id) return null;
 
     // If audio URL is missing, try to get it from storage
     if (project.audioStorageId && !project.audioUrl) {
@@ -81,31 +91,33 @@ export const get = query({
   },
 });
 
+import { paginationOptsValidator } from "convex/server";
+
 // ─── List User Projects ───
 export const list = query({
   args: {
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    if (!identity) return { page: [], isDone: true, continueCursor: "" };
 
     const user = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", identity.email!))
       .first();
 
-    if (!user) return [];
+    if (!user) return { page: [], isDone: true, continueCursor: "" };
 
-    const projects = await ctx.db
+    const results = await ctx.db
       .query("projects")
       .withIndex("by_user_id", (q) => q.eq("userId", user._id))
       .order("desc")
-      .take(args.limit || 50);
+      .paginate(args.paginationOpts);
 
     // Resolve audio URLs for each project
-    const projectsWithUrls = await Promise.all(
-      projects.map(async (project) => {
+    const pageWithUrls = await Promise.all(
+      results.page.map(async (project) => {
         let audioUrl = project.audioUrl;
         if (project.audioStorageId && !audioUrl) {
           audioUrl = await ctx.storage.getUrl(project.audioStorageId) || undefined;
@@ -114,7 +126,7 @@ export const list = query({
       })
     );
 
-    return projectsWithUrls;
+    return { ...results, page: pageWithUrls };
   },
 });
 
@@ -133,10 +145,24 @@ export const update = mutation({
     )),
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", identity.email!))
+      .first();
+
+    if (!user) throw new Error("User not found");
+
     const { projectId, ...updates } = args;
 
     const existing = await ctx.db.get(projectId);
     if (!existing) throw new Error("Project not found");
+
+    if (existing.userId !== user._id) {
+      throw new Error("Unauthorized to access this project");
+    }
 
     await ctx.db.patch(projectId, {
       ...updates,
@@ -151,8 +177,22 @@ export const update = mutation({
 export const remove = mutation({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", identity.email!))
+      .first();
+
+    if (!user) throw new Error("User not found");
+
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
+
+    if (project.userId !== user._id) {
+      throw new Error("Unauthorized to access this project");
+    }
 
     // Delete audio file from storage
     if (project.audioStorageId) {

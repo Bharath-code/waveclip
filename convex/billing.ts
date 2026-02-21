@@ -151,6 +151,17 @@ export const handlePaymentSuccess = internalMutation({
     },
     handler: async (ctx, args) => {
         console.log("Payment succeeded:", args);
+
+        const existingPayment = await ctx.db
+            .query("payments")
+            .withIndex("by_payment_id", (q) => q.eq("paymentId", args.paymentId))
+            .first();
+
+        if (existingPayment) {
+            console.log("Payment already processed:", args.paymentId);
+            return;
+        }
+
         // Log the payment for records
         await ctx.db.insert("payments", {
             paymentId: args.paymentId,

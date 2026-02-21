@@ -18,6 +18,10 @@ export const transcribe = action({
             throw new Error("Project not found");
         }
 
+        if (project.status === "transcribing") {
+            throw new Error("Project is currently transcribing");
+        }
+
         if (!project.audioUrl) {
             throw new Error("Project has no audio file");
         }
@@ -42,11 +46,12 @@ export const transcribe = action({
             }
 
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
                 {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
+                        "x-goog-api-key": geminiApiKey,
                     },
                     body: JSON.stringify({
                         contents: [
@@ -245,6 +250,24 @@ export const updateCaption = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", identity.email!))
+            .first();
+
+        if (!user) throw new Error("User not found");
+
+        const caption = await ctx.db.get(args.captionId);
+        if (!caption) throw new Error("Caption not found");
+
+        const project = await ctx.db.get(caption.projectId);
+        if (!project || project.userId !== user._id) {
+            throw new Error("Unauthorized to access this caption");
+        }
+
         const { captionId, ...updates } = args;
 
         await ctx.db.patch(captionId, {
@@ -260,6 +283,24 @@ export const updateCaption = mutation({
 export const deleteCaption = mutation({
     args: { captionId: v.id("captions") },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", identity.email!))
+            .first();
+
+        if (!user) throw new Error("User not found");
+
+        const caption = await ctx.db.get(args.captionId);
+        if (!caption) throw new Error("Caption not found");
+
+        const project = await ctx.db.get(caption.projectId);
+        if (!project || project.userId !== user._id) {
+            throw new Error("Unauthorized to access this caption");
+        }
+
         await ctx.db.delete(args.captionId);
         return { success: true };
     },
@@ -272,9 +313,24 @@ export const splitCaption = mutation({
         splitTime: v.number(),
     },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", identity.email!))
+            .first();
+
+        if (!user) throw new Error("User not found");
+
         const caption = await ctx.db.get(args.captionId);
         if (!caption) {
             throw new Error("Caption not found");
+        }
+
+        const project = await ctx.db.get(caption.projectId);
+        if (!project || project.userId !== user._id) {
+            throw new Error("Unauthorized to access this caption");
         }
 
         // Validate split time is within caption bounds
@@ -325,6 +381,16 @@ export const mergeCaptions = mutation({
         captionIds: v.array(v.id("captions")),
     },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", identity.email!))
+            .first();
+
+        if (!user) throw new Error("User not found");
+
         if (args.captionIds.length < 2) {
             throw new Error("Need at least 2 captions to merge");
         }
@@ -341,6 +407,14 @@ export const mergeCaptions = mutation({
 
         if (validCaptions.length < 2) {
             throw new Error("Could not find enough captions to merge");
+        }
+
+        // Verify ownership for all captions
+        for (const caption of validCaptions) {
+            const project = await ctx.db.get(caption.projectId);
+            if (!project || project.userId !== user._id) {
+                throw new Error("Unauthorized to access one or more captions");
+            }
         }
 
         // Merge text and get time range
@@ -385,6 +459,21 @@ export const addCaption = mutation({
         ),
     },
     handler: async (ctx, args) => {
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) throw new Error("Not authenticated");
+
+        const user = await ctx.db
+            .query("users")
+            .withIndex("by_email", (q) => q.eq("email", identity.email!))
+            .first();
+
+        if (!user) throw new Error("User not found");
+
+        const project = await ctx.db.get(args.projectId);
+        if (!project || project.userId !== user._id) {
+            throw new Error("Unauthorized to access this project");
+        }
+
         const captionId = await ctx.db.insert("captions", {
             projectId: args.projectId,
             text: args.text,
