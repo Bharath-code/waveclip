@@ -2,25 +2,19 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
-import {
-    AudioWaveform,
-    Menu,
-    X,
-    LogIn,
-    UserPlus,
-    LayoutDashboard,
-    Settings,
-    LogOut,
-    Sparkles,
-    Sun,
-    Moon,
-} from 'lucide-react';
 
 interface NavbarProps {
     isAuthenticated?: boolean;
     userName?: string;
     onLogout?: () => void;
 }
+
+const Icon = ({ icon, className = "", style = {} }: { icon: string; className?: string, style?: any }) => {
+    return (
+        // @ts-ignore
+        <iconify-icon icon={icon} class={className} style={style}></iconify-icon>
+    );
+};
 
 export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarProps) {
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -55,12 +49,12 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
     ];
 
     const authLinks = [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { label: 'Settings', href: '/settings', icon: Settings },
+        { label: 'Dashboard', href: '/dashboard', icon: 'solar:widget-5-bold-duotone' },
+        { label: 'Settings', href: '/settings', icon: 'solar:settings-bold-duotone' },
     ];
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-slate-200/50 dark:border-slate-700/50">
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-white/60 dark:bg-slate-950/60 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 transition-colors duration-500">
             <div className="container-app">
                 <div className="flex h-16 items-center justify-between">
                     {/* Logo */}
@@ -69,23 +63,23 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                         className="flex items-center gap-2 group"
                     >
                         <div className="relative">
-                            <AudioWaveform className="h-8 w-8 text-indigo-600 transition-transform group-hover:scale-110" />
-                            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <Icon icon="solar:record-circle-bold-duotone" className="text-3xl text-indigo-600 transition-transform group-hover:scale-110" />
+                            <Icon icon="solar:star-fall-bold-duotone" className="absolute -top-1 -right-1 text-xs text-violet-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
-                        <span className="text-xl font-bold text-gradient">Audiogram</span>
+                        <span className="text-xl font-bold tracking-tighter text-slate-900 dark:text-white">WaveClip</span>
                     </Link>
 
                     {/* Desktop Navigation */}
-                    <div className="hidden md:flex items-center gap-6">
+                    <div className="hidden md:flex items-center gap-8">
                         {!isAuthenticated && navLinks.map((link) => (
                             <Link
                                 key={link.href}
                                 to={link.href}
                                 className={cn(
-                                    'text-sm font-medium transition-colors',
+                                    'text-sm font-semibold tracking-tight transition-colors',
                                     location.pathname === link.href
                                         ? 'text-indigo-600 dark:text-indigo-400'
-                                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                                        : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                                 )}
                             >
                                 {link.label}
@@ -97,60 +91,53 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                                 key={link.href}
                                 to={link.href}
                                 className={cn(
-                                    'flex items-center gap-2 text-sm font-medium transition-colors',
+                                    'flex items-center gap-2 text-sm font-semibold tracking-tight transition-colors group',
                                     location.pathname === link.href
                                         ? 'text-indigo-600 dark:text-indigo-400'
-                                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+                                        : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                                 )}
                             >
-                                <link.icon className="h-4 w-4" />
+                                <Icon icon={link.icon} className="text-lg group-hover:scale-110 transition-transform" />
                                 {link.label}
                             </Link>
                         ))}
                     </div>
 
                     {/* Desktop Auth Buttons & Theme Toggle */}
-                    <div className="hidden md:flex items-center gap-3">
+                    <div className="hidden md:flex items-center gap-4">
                         <button
                             onClick={toggleTheme}
-                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors mr-2"
+                            className="p-2 rounded-full text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all duration-300"
                             aria-label="Toggle theme"
                         >
-                            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                            <Icon icon={isDark ? "solar:sun-2-bold-duotone" : "solar:moon-bold-duotone"} className="text-xl" />
                         </button>
 
                         {isAuthenticated ? (
                             <>
-                                <span className="text-sm text-slate-600 dark:text-slate-300">
+                                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
                                     {userName}
                                 </span>
                                 <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={onLogout}
-                                    leftIcon={<LogOut className="h-4 w-4" />}
                                 >
+                                    <Icon icon="solar:logout-2-bold-duotone" className="text-lg mr-2" />
                                     Logout
                                 </Button>
                             </>
                         ) : (
                             <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    leftIcon={<LogIn className="h-4 w-4" />}
-                                    onClick={() => window.location.href = '/auth/login'}
-                                >
+                                <Link to="/auth/login" className="text-sm font-semibold tracking-tight text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
                                     Login
-                                </Button>
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    leftIcon={<UserPlus className="h-4 w-4" />}
-                                    onClick={() => window.location.href = '/auth/register'}
-                                >
-                                    Sign Up Free
-                                </Button>
+                                </Link>
+                                <Link to="/auth/register" className="relative inline-flex h-9 overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 group">
+                                    <span className="absolute inset-[-1000%] animate-[spin_3s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)] group-hover:bg-[conic-gradient(from_90deg_at_50%_50%,#fff_0%,#a5b4fc_50%,#fff_100%)] transition-colors duration-500" />
+                                    <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-50 dark:bg-slate-950 px-5 text-sm font-semibold tracking-tight text-slate-900 dark:text-white backdrop-blur-3xl transition-colors">
+                                        Execute Access
+                                    </span>
+                                </Link>
                             </>
                         )}
                     </div>
@@ -159,34 +146,30 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                     <div className="md:hidden flex items-center gap-2">
                         <button
                             onClick={toggleTheme}
-                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                            className="p-2 rounded-full text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-all duration-300"
                             aria-label="Toggle theme"
                         >
-                            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                            <Icon icon={isDark ? "solar:sun-2-bold-duotone" : "solar:moon-bold-duotone"} className="text-xl" />
                         </button>
                         <button
-                            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                            className="p-2 rounded-full text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800 transition-all duration-300"
                             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                             aria-label="Toggle menu"
                         >
-                            {mobileMenuOpen ? (
-                                <X className="h-6 w-6" />
-                            ) : (
-                                <Menu className="h-6 w-6" />
-                            )}
+                            <Icon icon={mobileMenuOpen ? "solar:close-circle-bold-duotone" : "solar:hamburger-menu-bold-duotone"} className="text-2xl" />
                         </button>
                     </div>
                 </div>
 
                 {/* Mobile Menu */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
-                        <div className="flex flex-col gap-2">
+                    <div className="md:hidden py-6 border-t border-slate-200 dark:border-slate-800 animate-fade-in bg-white/95 dark:bg-slate-950/95 backdrop-blur-3xl absolute left-0 right-0 px-4 shadow-xl">
+                        <div className="flex flex-col gap-4">
                             {!isAuthenticated && navLinks.map((link) => (
                                 <Link
                                     key={link.href}
                                     to={link.href}
-                                    className="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                                    className="px-4 py-3 rounded-xl text-sm font-semibold tracking-tight text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900/50"
                                     onClick={() => setMobileMenuOpen(false)}
                                 >
                                     {link.label}
@@ -197,29 +180,29 @@ export function Navbar({ isAuthenticated = false, userName, onLogout }: NavbarPr
                                 <Link
                                     key={link.href}
                                     to={link.href}
-                                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-tight text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900/50"
                                     onClick={() => setMobileMenuOpen(false)}
                                 >
-                                    <link.icon className="h-4 w-4" />
+                                    <Icon icon={link.icon} className="text-xl text-indigo-500" />
                                     {link.label}
                                 </Link>
                             ))}
 
-                            <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-700">
+                            <div className="pt-4 mt-2 border-t border-slate-200 dark:border-slate-800">
                                 {isAuthenticated ? (
                                     <button
-                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                                        className="flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold tracking-tight text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-900/50"
                                         onClick={onLogout}
                                     >
-                                        <LogOut className="h-4 w-4" />
+                                        <Icon icon="solar:logout-2-bold-duotone" className="text-xl text-rose-500" />
                                         Logout
                                     </button>
                                 ) : (
-                                    <div className="flex flex-col gap-2 px-3">
-                                        <Button variant="outline" onClick={() => window.location.href = '/auth/login'}>
+                                    <div className="flex flex-col gap-3">
+                                        <Button variant="outline" className="w-full justify-center h-12 rounded-xl" onClick={() => window.location.href = '/auth/login'}>
                                             Login
                                         </Button>
-                                        <Button variant="primary" onClick={() => window.location.href = '/auth/register'}>
+                                        <Button variant="primary" className="w-full justify-center h-12 rounded-xl" onClick={() => window.location.href = '/auth/register'}>
                                             Sign Up Free
                                         </Button>
                                     </div>
